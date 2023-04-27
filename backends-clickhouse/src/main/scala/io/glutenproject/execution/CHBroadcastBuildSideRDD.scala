@@ -16,14 +16,37 @@
  */
 package io.glutenproject.execution
 
-import java.util
+import io.glutenproject.backendsapi.clickhouse.CHBackendSettings
+import io.glutenproject.vectorized.StorageJoinBuilder
 
-object CHBroadcastBuildSideRDD {
+import org.apache.spark.SparkEnv
+import org.apache.spark.internal.Logging
+
+import org.sparkproject.guava.cache.{Cache, CacheBuilder, RemovalNotification}
+
+import java.util.concurrent.TimeUnit
+
+object CHBroadcastBuildSideRDD extends Logging {
+
+  private lazy val expiredTime = SparkEnv.get.conf.getLong(
+    CHBackendSettings.GLUTEN_CLICKHOUSE_BROADCAST_CACHE_EXPIRED_TIME,
+    CHBackendSettings.GLUTEN_CLICKHOUSE_BROADCAST_CACHE_EXPIRED_TIME_DEFAULT
+  )
 
   // Use for controling to build bhj hash table once.
-  val buildSideRelationCache = new util.LinkedHashMap[String, Long]() {
-    override def removeEldestEntry(eldest: util.Map.Entry[String, Long]): Boolean = {
-      size() > 100;
-    }
+  val buildSideRelationCache: Cache[String, String] =
+    CacheBuilder.newBuilder
+      .expireAfterAccess(expiredTime, TimeUnit.SECONDS)
+      .removalListener(
+        (notification: RemovalNotification[String, String]) => {
+          cleanBuildHashTable(notification.getKey, notification.getValue.toLong)
+        })
+      .build[String, String]()
+
+  def cleanBuildHashTable(key: String, value: Long): Unit = {
+    StorageJoinBuilder.nativeCleanBuildHashTable(key, value)
+    log.trace(
+      s"Clean build hash table $key success." +
+        s"Cache size now is ${buildSideRelationCache.size()}")
   }
 }

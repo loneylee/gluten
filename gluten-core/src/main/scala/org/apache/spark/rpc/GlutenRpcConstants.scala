@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package io.glutenproject.backendsapi
+package org.apache.spark.rpc
 
-import org.apache.spark.SparkConf
+object GlutenRpcConstants {
 
-trait InitializerApi {
-  def initialize(conf: SparkConf): Unit = {}
+  val GLUTEN_DRIVER_ENDPOINT_NAME = "GlutenDriverEndpoint"
+
+  val GLUTEN_EXECUTOR_ENDPOINT_NAME = "GlutenExecutorEndpoint"
 }

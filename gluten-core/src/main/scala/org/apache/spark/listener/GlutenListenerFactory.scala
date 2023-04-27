@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.glutenproject.backendsapi.velox
 
-import io.glutenproject.backendsapi.ShutdownApi
+package org.apache.spark.listener
 
-class VeloxShutdownApi extends ShutdownApi {
+import org.apache.spark.SparkContext
+import org.apache.spark.rpc.RpcEndpointRef
 
-  override def shutdown(): Unit = {
-    /// TODO shutdown implementation in velox to release resources
+object GlutenListenerFactory {
+  def addToSparkListenerBus(sc: SparkContext, driverEndpointRef: RpcEndpointRef): Unit = {
+    sc.listenerBus.addToStatusQueue(new GlutenSQLAppStatusListener(driverEndpointRef))
   }
 }

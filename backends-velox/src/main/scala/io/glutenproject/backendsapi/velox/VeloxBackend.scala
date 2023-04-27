@@ -32,8 +32,6 @@ import scala.util.control.Breaks.{break, breakable}
 
 class VeloxBackend extends Backend {
   override def name: String = GlutenConfig.GLUTEN_VELOX_BACKEND
-  override def initializerApi(): InitializerApi = new VeloxInitializerApi
-  override def shutdownApi(): ShutdownApi = new VeloxShutdownApi
   override def iteratorApi(): IteratorApi = new VeloxIteratorApi
   override def sparkPlanExecApi(): SparkPlanExecApi = new VeloxSparkPlanExecApi
   override def transformerApi(): TransformerApi = new VeloxTransformerApi
@@ -42,6 +40,8 @@ class VeloxBackend extends Backend {
   override def metricsApi(): MetricsApi = new VeloxMetricsApi
 
   override def settings(): BackendSettings = VeloxBackendSettings
+
+  override def contextApi(): ContextApi = new VeloxContextApi
 }
 
 object VeloxBackendSettings extends BackendSettings {

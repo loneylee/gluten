@@ -792,7 +792,7 @@ JNIEXPORT void Java_io_glutenproject_vectorized_BlockNativeWriter_nativeClose(JN
     LOCAL_ENGINE_JNI_METHOD_END(env,)
 }
 
-JNIEXPORT void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeBuild(
+JNIEXPORT jlong Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeBuild(
     JNIEnv * env, jobject, jstring hash_table_id_, jobject in, jint io_buffer_size, jstring join_key_, jstring join_type_, jbyteArray named_struct)
 {
     LOCAL_ENGINE_JNI_METHOD_START
@@ -804,8 +804,28 @@ JNIEXPORT void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeBuild(
     jbyte * struct_address = env->GetByteArrayElements(named_struct, nullptr);
     std::string struct_string;
     struct_string.assign(reinterpret_cast<const char *>(struct_address), struct_size);
-    local_engine::BroadCastJoinBuilder::buildJoinIfNotExist(hash_table_id, input, io_buffer_size, join_key, join_type, struct_string);
+    auto wrapper
+        = local_engine::BroadCastJoinBuilder::buildJoin(hash_table_id, input, io_buffer_size, join_key, join_type, struct_string);
     env->ReleaseByteArrayElements(named_struct, struct_address, JNI_ABORT);
+
+    return reinterpret_cast<jlong>(wrapper.get());
+    LOCAL_ENGINE_JNI_METHOD_END(env,)
+}
+
+JNIEXPORT void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeCleanBuildHashTable(
+    JNIEnv * env, jclass, jstring hash_table_id_, jlong instance)
+{
+    LOCAL_ENGINE_JNI_METHOD_START
+    auto hash_table_id = jstring2string(env, hash_table_id_);
+    local_engine::BroadCastJoinBuilder::cleanBuildHashTable(hash_table_id, instance);
+    LOCAL_ENGINE_JNI_METHOD_END(env,)
+}
+
+JNIEXPORT jint Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeCachedHashTableCount(
+    JNIEnv * env, jclass)
+{
+    LOCAL_ENGINE_JNI_METHOD_START
+    return local_engine::BroadCastJoinBuilder::cachedHashTableCount();
     LOCAL_ENGINE_JNI_METHOD_END(env,)
 }
 
