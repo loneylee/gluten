@@ -38,6 +38,7 @@ class GlutenClickHouseTPCDSParquetColumnarShuffleSuite extends GlutenClickHouseT
       // Currently, it can not support to read multiple partitioned file in one task.
       .set("spark.sql.files.maxPartitionBytes", "134217728")
       .set("spark.sql.files.openCostInBytes", "134217728")
+      .set("spark.gluten.sql.columnar.backend.ch.runtime_conf.logger.level", "debug")
   }
 
   tpcdsAllQueries.foreach(
@@ -48,7 +49,7 @@ class GlutenClickHouseTPCDSParquetColumnarShuffleSuite extends GlutenClickHouseT
             runTPCDSQuery(sql) { df => }
           }
         } else {
-          ignore(s"TPCDS ${sql.toUpperCase()}") {
+          test(s"TPCDS ${sql.toUpperCase()}") {
             runTPCDSQuery(sql) { df => }
           }
         }

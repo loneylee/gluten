@@ -21,7 +21,9 @@ import io.glutenproject.GlutenPlugin.{GLUTEN_SESSION_EXTENSION_NAME, SPARK_SESSI
 import io.glutenproject.backendsapi.BackendsApiManager
 import io.glutenproject.extension.{ColumnarOverrides, ColumnarQueryStagePrepOverrides, OthersExtensionOverrides, StrategyOverrides}
 import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin, PluginContext, SparkPlugin}
+import org.apache.spark.listener.{GlutenListenerFactory, GlutenSQLAppStatusListener}
 import org.apache.spark.network.util.JavaUtils
+import org.apache.spark.rpc.{GlutenExecutorEndpoint, RpcEndpointRef}
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.internal.StaticSQLConf
 import org.apache.spark.{SparkConf, SparkContext}
@@ -46,12 +48,13 @@ private[glutenproject] class GlutenDriverPlugin extends DriverPlugin {
     setPredefinedConfigs(sc, conf)
     // Initialize Backends API
     BackendsApiManager.initialize()
-    BackendsApiManager.getInitializerApiInstance.initialize(conf)
+    BackendsApiManager.getContextApiInstance().initialize(conf)
+    GlutenListenerFactory.addToSparkListenerBus(sc)
     Collections.emptyMap()
   }
 
   override def shutdown() {
-    BackendsApiManager.getShutdownApiInstance.shutdown()
+    BackendsApiManager.getContextApiInstance.shutdown()
   }
 
   def setPredefinedConfigs(sc: SparkContext, conf: SparkConf): Unit = {
@@ -91,12 +94,14 @@ private[glutenproject] class GlutenDriverPlugin extends DriverPlugin {
 }
 
 private[glutenproject] class GlutenExecutorPlugin extends ExecutorPlugin {
+  var executorEndpoint: GlutenExecutorEndpoint = _
 
   /**
    * Initialize the executor plugin.
    */
   override def init(ctx: PluginContext, extraConf: util.Map[String, String]): Unit = {
     val conf = ctx.conf()
+
     // Must set the 'spark.memory.offHeap.size' value to native memory malloc
     if (!conf.getBoolean("spark.memory.offHeap.enabled", false) ||
       (JavaUtils.byteStringAsBytes(
@@ -106,7 +111,9 @@ private[glutenproject] class GlutenExecutorPlugin extends ExecutorPlugin {
     }
     // Initialize Backends API
     BackendsApiManager.initialize()
-    BackendsApiManager.getInitializerApiInstance.initialize(conf)
+    BackendsApiManager.getContextApiInstance().initialize(conf)
+
+    executorEndpoint = new GlutenExecutorEndpoint(ctx.executorID(), conf)
   }
 
   /**
@@ -114,7 +121,7 @@ private[glutenproject] class GlutenExecutorPlugin extends ExecutorPlugin {
    * For example: close the native engine.
    */
   override def shutdown(): Unit = {
-    BackendsApiManager.getShutdownApiInstance.shutdown()
+    BackendsApiManager.getContextApiInstance().shutdown()
     super.shutdown()
   }
 }

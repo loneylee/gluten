@@ -15,26 +15,16 @@
  * limitations under the License.
  */
 
-package io.glutenproject.backendsapi
+package io.glutenproject.vectorized;
 
-trait Backend {
-  def name(): String
+public class StorageJoinRelease {
 
-  def initializerApi(): InitializerApi
+    public StorageJoinRelease() {
+    }
 
-  def shutdownApi(): ShutdownApi
+    private native void nativeCleanBuildHashTable(String buildHashTableId);
 
-  def iteratorApi(): IteratorApi
-
-  def sparkPlanExecApi(): SparkPlanExecApi
-
-  def transformerApi(): TransformerApi
-
-  def validatorApi(): ValidatorApi
-
-  def metricsApi(): MetricsApi
-
-  def settings(): BackendSettings
-
-  def contextApi(): ContextApi
+    public void cleanBuildHashTable(String buildHashTableId) {
+        nativeCleanBuildHashTable(buildHashTableId);
+    }
 }

@@ -17,24 +17,15 @@
 
 package io.glutenproject.backendsapi
 
-trait Backend {
-  def name(): String
+import org.apache.spark.SparkConf
 
-  def initializerApi(): InitializerApi
+trait ContextApi {
+  def initialize(conf: SparkConf): Unit = {}
 
-  def shutdownApi(): ShutdownApi
+  def shutdown(): Unit = {}
 
-  def iteratorApi(): IteratorApi
+  def onExecutionEnd(executionId: String): Unit = {}
 
-  def sparkPlanExecApi(): SparkPlanExecApi
-
-  def transformerApi(): TransformerApi
-
-  def validatorApi(): ValidatorApi
-
-  def metricsApi(): MetricsApi
-
-  def settings(): BackendSettings
-
-  def contextApi(): ContextApi
+  def collectExecutionBroadcastHashTableId(executionId: String,
+                                           buildHashTableId: String): Unit = {}
 }

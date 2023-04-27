@@ -18,9 +18,9 @@
 package io.glutenproject.execution
 
 import io.glutenproject.backendsapi.BackendsApiManager
-
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.execution.SQLExecution
 import org.apache.spark.sql.execution.joins.BuildSideRelation
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
@@ -42,6 +42,6 @@ case class BroadcastBuildSideRDD(
 
   override def compute(split: Partition, context: TaskContext): Iterator[ColumnarBatch] = {
     BackendsApiManager.getIteratorApiInstance
-      .genBroadcastBuildSideIterator(split, context, broadcasted, broadCastContext)
+      .genBroadcastBuildSideIterator(sc, split, context, broadcasted, broadCastContext)
   }
 }

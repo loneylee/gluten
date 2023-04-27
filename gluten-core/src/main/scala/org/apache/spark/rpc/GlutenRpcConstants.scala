@@ -15,26 +15,11 @@
  * limitations under the License.
  */
 
-package io.glutenproject.backendsapi
+package org.apache.spark.rpc
 
-trait Backend {
-  def name(): String
+object GlutenRpcConstants {
 
-  def initializerApi(): InitializerApi
+  val GLUTEN_DRIVER_ENDPOINT_NAME = "GlutenDriverEndpoint"
 
-  def shutdownApi(): ShutdownApi
-
-  def iteratorApi(): IteratorApi
-
-  def sparkPlanExecApi(): SparkPlanExecApi
-
-  def transformerApi(): TransformerApi
-
-  def validatorApi(): ValidatorApi
-
-  def metricsApi(): MetricsApi
-
-  def settings(): BackendSettings
-
-  def contextApi(): ContextApi
+  val GLUTEN_EXECUTOR_ENDPOINT_NAME = "GlutenExecutorEndpoint"
 }

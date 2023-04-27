@@ -809,6 +809,15 @@ void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeBuild(
     LOCAL_ENGINE_JNI_METHOD_END(env,)
 }
 
+void Java_io_glutenproject_vectorized_StorageJoinRelease_nativeCleanBuildHashTable(
+    JNIEnv * env, jobject, jstring hash_table_id_)
+{
+    LOCAL_ENGINE_JNI_METHOD_START
+    auto hash_table_id = jstring2string(env, hash_table_id_);
+    local_engine::BroadCastJoinBuilder::cleanBuildHashTable(hash_table_id);
+    LOCAL_ENGINE_JNI_METHOD_END(env,)
+}
+
 // BlockSplitIterator
 jlong Java_io_glutenproject_vectorized_BlockSplitIterator_nativeCreate(
     JNIEnv * env, jobject, jobject in, jstring name, jstring expr, jstring schema, jint partition_num, jint buffer_size)

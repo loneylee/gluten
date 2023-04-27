@@ -15,26 +15,18 @@
  * limitations under the License.
  */
 
-package io.glutenproject.backendsapi
+package org.apache.spark.rpc
 
-trait Backend {
-  def name(): String
+trait GlutenRpcMessage extends Serializable
 
-  def initializerApi(): InitializerApi
+object GlutenRpcMessages {
+  case class GlutenRegisterExecutor(
+      executorId: String,
+      executorRef: RpcEndpointRef
+  ) extends GlutenRpcMessage
 
-  def shutdownApi(): ShutdownApi
+  case class GlutenOnExecutionEnd(executionId: String) extends GlutenRpcMessage
 
-  def iteratorApi(): IteratorApi
+  case class GlutenExecutorRemoved(executorId: String) extends GlutenRpcMessage
 
-  def sparkPlanExecApi(): SparkPlanExecApi
-
-  def transformerApi(): TransformerApi
-
-  def validatorApi(): ValidatorApi
-
-  def metricsApi(): MetricsApi
-
-  def settings(): BackendSettings
-
-  def contextApi(): ContextApi
 }
