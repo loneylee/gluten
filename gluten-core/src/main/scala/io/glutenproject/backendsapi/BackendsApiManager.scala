@@ -27,6 +27,7 @@ object BackendsApiManager {
       glutenBackendName: String,
       initializerApiInstance: InitializerApi,
       shutdownApiInstance: ShutdownApi,
+      contextApi: ContextApi,
       iteratorApiInstance: IteratorApi,
       sparkPlanExecApiInstance: SparkPlanExecApi,
       transformerApiInstance: TransformerApi,
@@ -53,6 +54,7 @@ object BackendsApiManager {
       backend.name(),
       backend.initializerApi(),
       backend.shutdownApi(),
+      backend.contextApi(),
       backend.iteratorApi(),
       backend.sparkPlanExecApi(),
       backend.transformerApi(),
@@ -67,6 +69,10 @@ object BackendsApiManager {
    */
   def initialize(): String = {
     getBackendName
+  }
+
+  def getContextApiInstance(): ContextApi = {
+    manager.contextApi
   }
 
   def getBackendName: String = {

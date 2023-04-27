@@ -15,26 +15,12 @@
  * limitations under the License.
  */
 
-package io.glutenproject.backendsapi
+package org.apache.spark.listener
 
-trait Backend {
-  def name(): String
+import org.apache.spark.SparkContext
 
-  def initializerApi(): InitializerApi
-
-  def shutdownApi(): ShutdownApi
-
-  def iteratorApi(): IteratorApi
-
-  def sparkPlanExecApi(): SparkPlanExecApi
-
-  def transformerApi(): TransformerApi
-
-  def validatorApi(): ValidatorApi
-
-  def metricsApi(): MetricsApi
-
-  def settings(): BackendSettings
-
-  def contextApi(): ContextApi
+object GlutenListenerFactory {
+  def addToSparkListenerBus(sc: SparkContext): Unit = {
+    sc.listenerBus.addToStatusQueue(new GlutenSQLAppStatusListener(sc.getConf))
+  }
 }

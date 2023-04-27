@@ -17,7 +17,7 @@
 package io.glutenproject.execution
 
 import io.glutenproject.extension.GlutenPlan
-
+import jodd.util.ThreadUtil.sleep
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.optimizer.BuildLeft
@@ -42,6 +42,7 @@ class GlutenClickHouseTPCHParquetSuite extends GlutenClickHouseTPCHAbstractSuite
       .set("spark.sql.shuffle.partitions", "5")
       .set("spark.sql.autoBroadcastJoinThreshold", "10MB")
       .set("spark.gluten.sql.columnar.backend.ch.use.v2", "false")
+      .set("spark.gluten.sql.columnar.backend.ch.runtime_conf.logger.level", "debug")
   }
 
   override protected val createNullableTables = true
@@ -217,6 +218,7 @@ class GlutenClickHouseTPCHParquetSuite extends GlutenClickHouseTPCHAbstractSuite
           case scanExec: BasicScanExecTransformer => scanExec
         }
         assert(scanExec.size == 8)
+        sleep(100000000)
     }
   }
 

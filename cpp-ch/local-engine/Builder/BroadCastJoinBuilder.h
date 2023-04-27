@@ -24,6 +24,9 @@ public:
         const std::string & join_type,
         const std::string & named_struct);
 
+    static void cleanBuildHashTable(const std::string & hash_table_id);
+
+
     static std::shared_ptr<StorageJoinFromReadBuffer> getJoin(const std::string & key);
 
     static void clean();

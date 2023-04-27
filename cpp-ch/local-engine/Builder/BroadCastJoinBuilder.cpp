@@ -3,6 +3,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Common/ThreadPool.h>
 #include <Common/JNIUtils.h>
+#include <Common/logger_useful.h>
 
 namespace DB
 {
@@ -41,6 +42,7 @@ void BroadCastJoinBuilder::buildJoinIfNotExist(
     DB::JoinStrictness strictness_,
     const DB::ColumnsDescription & columns_)
 {
+    LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table size is {}", storage_join_map.size());
     if (!storage_join_map.contains(key))
     {
         std::lock_guard build_lock(join_lock_mutex);
@@ -54,11 +56,11 @@ void BroadCastJoinBuilder::buildJoinIfNotExist(
             auto func = [context]() -> void
             {
                 // limit memory usage
-                if (storage_join_queue.size() > 10)
+                if (storage_join_map.size() > 10 && !storage_join_queue.empty())
                 {
                     auto tmp = storage_join_queue.front();
                     storage_join_queue.pop();
-                    storage_join_map.erase(tmp);
+                    cleanBuildHashTable(tmp);
                 }
                 auto storage_join = std::make_shared<StorageJoinFromReadBuffer>(
                     std::make_unique<ReadBufferFromJavaInputStream>(context.input, context.io_buffer_size),
@@ -88,6 +90,29 @@ void BroadCastJoinBuilder::buildJoinIfNotExist(
         CLEAN_JNIENV
     }
 }
+
+void BroadCastJoinBuilder::cleanBuildHashTable(const std::string & hash_table_id)
+{
+    if (storage_join_map.contains(hash_table_id))
+    {
+        storage_join_map.erase(hash_table_id);
+    }
+
+    while (!storage_join_queue.empty() && !storage_join_map.contains(storage_join_queue.front()))
+    {
+        storage_join_queue.pop();
+    }
+
+    auto iter = storage_join_map.begin();
+    while(iter != storage_join_map.end()) {
+        LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table is {}", iter->first);
+        iter++;
+    }
+
+    LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table size is {}", storage_join_map.size());
+}
+
+
 std::shared_ptr<StorageJoinFromReadBuffer> BroadCastJoinBuilder::getJoin(const std::string & key)
 {
     if (storage_join_map.contains(key))
