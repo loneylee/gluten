@@ -1,5 +1,4 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
@@ -22,18 +21,25 @@ import java.util.Objects
 import io.glutenproject.GlutenConfig
 import io.glutenproject.backendsapi.BackendsApiManager
 import io.glutenproject.metrics.MetricsUpdater
-
+import io.glutenproject.substrait.SubstraitContext
+import io.glutenproject.substrait.rel.ReadRelNode
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.connector.read.{InputPartition, Scan}
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.datasources.v2.json.JsonScan
+import org.apache.spark.sql.execution.datasources.v2.text.TextScan
 import org.apache.spark.sql.execution.datasources.v2.{BatchScanExecShim, FileScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
+import scala.collection.JavaConverters
+
 class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan: Scan,
                                runtimeFilters: Seq[Expression],
-                               pushdownFilters: Seq[Expression] = Seq())
+                               pushdownFilters: Seq[Expression] = Seq(),
+                               properties: Map[String, String] = Map.empty,
+                               dataSchema: StructType = new StructType())
   extends BatchScanExecShim(output, scan, runtimeFilters) with BasicScanExecTransformer {
 
   // Note: "metrics" is made transient to avoid sending driver-side metrics to tasks.
@@ -100,5 +106,17 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
 
   def getPushdownFilters(): Seq[Expression] = {
     pushdownFilters
+  }
+
+  override def doTransform(context: SubstraitContext): TransformContext = {
+    val transformCtx = super.doTransform(context)
+    if (transformCtx.root != null
+      && transformCtx.root.isInstanceOf[ReadRelNode]
+      && scan.isInstanceOf[TextScan]) {
+      val readRelNode = transformCtx.root.asInstanceOf[ReadRelNode]
+      readRelNode.setDataSchema(dataSchema)
+      readRelNode.setProperties(JavaConverters.mapAsJavaMap(properties))
+    }
+    transformCtx
   }
 }
