@@ -21,6 +21,7 @@ import io.glutenproject.execution._
 import io.glutenproject.expression.{AliasBaseTransformer, AliasTransformer, ExpressionTransformer}
 import io.glutenproject.expression.CHSha1Transformer
 import io.glutenproject.expression.CHSha2Transformer
+import io.glutenproject.sql.shims.SparkShimLoader
 import io.glutenproject.vectorized.{CHBlockWriterJniWrapper, CHColumnarBatchSerializer}
 
 import org.apache.spark.{ShuffleDependency, SparkException}
@@ -29,6 +30,7 @@ import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.{GenShuffleWriterParameters, GlutenShuffleWriterWrapper}
 import org.apache.spark.shuffle.utils.CHShuffleUtil
 import org.apache.spark.sql.{SparkSession, Strategy}
+import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
 import org.apache.spark.sql.catalyst.optimizer.BuildSide
@@ -40,17 +42,23 @@ import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.adaptive.ColumnarAQEShuffleReadExec
 import org.apache.spark.sql.execution.datasources.ColumnarToFakeRowStrategy
 import org.apache.spark.sql.execution.datasources.GlutenColumnarRules.NativeWritePostRule
+import org.apache.spark.sql.execution.datasources.InMemoryFileIndex
 import org.apache.spark.sql.execution.datasources.v1.ClickHouseFileIndex
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.datasources.v2.clickhouse.source.ClickHouseScan
+import org.apache.spark.sql.execution.datasources.v2.json.JsonScan
 import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
 import org.apache.spark.sql.execution.joins.{BuildSideRelation, ClickHouseBuildSideRelation, HashedRelationBroadcastMode}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.execution.utils.CHExecUtil
 import org.apache.spark.sql.extension.ClickHouseAnalysis
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{ArrayType, MapType, StructField, StructType}
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
+import org.apache.hadoop.fs.Path
+
+import scala.collection.JavaConverters
 import scala.collection.mutable.ArrayBuffer
 
 class CHSparkPlanExecApi extends SparkPlanExecApi {
@@ -379,4 +387,103 @@ class CHSparkPlanExecApi extends SparkPlanExecApi {
     new CHSha1Transformer(substraitExprName, child, original)
   }
 
+  /**
+   * Generate an BasicScanExecTransformer to transfrom hive table scan. Currently only for CH
+   * backend.
+   * @param child
+   * @return
+   */
+  override def genHiveTableScanExecTransformer(child: SparkPlan): BasicScanExecTransformer = {
+    if (!child.getClass.getSimpleName.equals("HiveTableScanExec")) {
+      return null
+    }
+    var hiveTableRelation = null.asInstanceOf[HiveTableRelation]
+    var partitionPruningPred = null.asInstanceOf[Seq[Expression]]
+    var planOutput = null.asInstanceOf[Seq[Attribute]]
+    var sparkSession = null.asInstanceOf[SparkSession]
+    child.getClass.getDeclaredFields.foreach(
+      f => {
+        f.setAccessible(true)
+        f.getName match {
+          case "relation" =>
+            hiveTableRelation = f.get(child).asInstanceOf[HiveTableRelation]
+          case "partitionPruningPred" =>
+            partitionPruningPred = f.get(child).asInstanceOf[Seq[Expression]]
+          case "output" =>
+            planOutput = f.get(child).asInstanceOf[Seq[Attribute]]
+          case "sparkSession" =>
+            sparkSession = f.get(child).asInstanceOf[SparkSession]
+          case _ =>
+        }
+      })
+    if (
+      hiveTableRelation == null
+      || partitionPruningPred == null
+      || planOutput == null
+      || sparkSession == null
+    ) {
+      return null
+    }
+    val tableMeta = hiveTableRelation.tableMeta
+    val fileIndex = new InMemoryFileIndex(
+      sparkSession,
+      Seq.apply(new Path(tableMeta.location)),
+      Map.empty,
+      Option.apply(tableMeta.schema))
+    val output =
+      if (planOutput.nonEmpty) planOutput.asInstanceOf[Seq[AttributeReference]]
+      else hiveTableRelation.dataCols
+    var hasComplexType = false
+    val outputFieldTypes = new ArrayBuffer[StructField]()
+    output.foreach(
+      x => {
+        hasComplexType = if (!hasComplexType) {
+          x.dataType.isInstanceOf[StructType] ||
+          x.dataType.isInstanceOf[MapType] ||
+          x.dataType.isInstanceOf[ArrayType]
+        } else hasComplexType
+        outputFieldTypes.append(StructField(x.name, x.dataType))
+      })
+    tableMeta.storage.inputFormat match {
+      case Some("org.apache.hadoop.mapred.TextInputFormat") =>
+        tableMeta.storage.serde match {
+          case Some("org.openx.data.jsonserde.JsonSerDe") =>
+            val scan = JsonScan(
+              sparkSession,
+              fileIndex,
+              tableMeta.schema,
+              StructType(outputFieldTypes.toArray),
+              tableMeta.partitionSchema,
+              new CaseInsensitiveStringMap(JavaConverters.mapAsJavaMap(tableMeta.properties)),
+              Array.empty,
+              partitionPruningPred,
+              Seq.empty
+            )
+            new BatchScanExecTransformer(output, scan, Seq.empty, Seq.empty)
+          case _ =>
+            val scan = SparkShimLoader.getSparkShims.getTextScan(
+              sparkSession,
+              fileIndex,
+              tableMeta.schema,
+              StructType(outputFieldTypes.toArray),
+              tableMeta.partitionSchema,
+              new CaseInsensitiveStringMap(JavaConverters.mapAsJavaMap(tableMeta.properties)),
+              partitionPruningPred,
+              Seq.empty
+            )
+            if (!hasComplexType) {
+              new BatchScanExecTransformer(
+                output,
+                scan,
+                Seq.empty,
+                Seq.empty,
+                tableMeta.storage.properties,
+                tableMeta.dataSchema)
+            } else {
+              null
+            }
+        }
+      case _ => null
+    }
+  }
 }

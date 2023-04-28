@@ -383,6 +383,8 @@ object ConverterUtils extends Logging {
           case "ParquetScan" => ReadFileFormat.ParquetReadFormat
           case "DwrfScan" => ReadFileFormat.DwrfReadFormat
           case "ClickHouseScan" => ReadFileFormat.MergeTreeReadFormat
+          case "TextScan" => ReadFileFormat.HiveTextReadFormat
+          case "JsonScan" => ReadFileFormat.JsonReadFormat
           case _ => ReadFileFormat.UnknownFormat
         }
       case f: FileSourceScanExecTransformer =>
