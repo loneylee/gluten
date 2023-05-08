@@ -21,7 +21,7 @@ import io.glutenproject.GlutenPlugin.{GLUTEN_SESSION_EXTENSION_NAME, SPARK_SESSI
 import io.glutenproject.backendsapi.BackendsApiManager
 import io.glutenproject.extension.{ColumnarOverrides, ColumnarQueryStagePrepOverrides, OthersExtensionOverrides, StrategyOverrides}
 import org.apache.spark.api.plugin.{DriverPlugin, ExecutorPlugin, PluginContext, SparkPlugin}
-import org.apache.spark.listener.{GlutenListenerFactory, GlutenSQLAppStatusListener}
+import org.apache.spark.listener.{GlutenListenerFactory}
 import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.rpc.{GlutenExecutorEndpoint, RpcEndpointRef}
 import org.apache.spark.sql.SparkSessionExtensions

@@ -42,6 +42,6 @@ case class BroadcastBuildSideRDD(
 
   override def compute(split: Partition, context: TaskContext): Iterator[ColumnarBatch] = {
     BackendsApiManager.getIteratorApiInstance
-      .genBroadcastBuildSideIterator(sc, split, context, broadcasted, broadCastContext)
+      .genBroadcastBuildSideIterator(split, context, broadcasted, broadCastContext)
   }
 }

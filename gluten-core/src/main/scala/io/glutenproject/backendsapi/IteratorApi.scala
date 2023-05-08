@@ -122,8 +122,7 @@ trait IteratorApi {
   /**
    * Compute for BroadcastBuildSideRDD
    */
-  def genBroadcastBuildSideIterator(sparkContext: SparkContext,
-                                     split: Partition,
+  def genBroadcastBuildSideIterator(split: Partition,
                                     context: TaskContext,
                                     broadcasted: broadcast.Broadcast[BuildSideRelation],
                                     broadCastContext: BroadCastHashJoinContext

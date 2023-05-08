@@ -16,9 +16,30 @@
  */
 package io.glutenproject.execution
 
-import java.util.concurrent.ConcurrentHashMap
+import io.glutenproject.vectorized.StorageJoinRelease
+import org.apache.spark.internal.Logging
+import org.sparkproject.guava.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 
-object CHBroadcastBuildSideRDD {
+import java.util.concurrent.TimeUnit
+
+object CHBroadcastBuildSideRDD extends Logging {
+
   // Use for controling to build bhj hash table once.
-  val buildSideRelationCache = new ConcurrentHashMap[String, Long]()
+  val buildSideRelationCache: Cache[String, String] =
+    CacheBuilder.newBuilder
+      .expireAfterAccess(1, TimeUnit.DAYS)
+      .removalListener(
+        new RemovalListener[String, String] {
+          override def onRemoval(notification: RemovalNotification[String, String]): Unit = {
+            val release = new StorageJoinRelease()
+            release.cleanBuildHashTable(notification.getKey, notification.getValue.toLong)
+            log.trace(
+              s"Clean build hash table ${notification.getKey} success." +
+                s"Cache size now is ${buildSideRelationCache.size()}")
+          }
+        }
+      )
+      .build[String, String]();
+
+//  val buildSideRelationCache = new ConcurrentHashMap[String, Long]()
 }

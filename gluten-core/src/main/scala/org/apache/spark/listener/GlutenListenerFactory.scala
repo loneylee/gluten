@@ -21,6 +21,6 @@ import org.apache.spark.SparkContext
 
 object GlutenListenerFactory {
   def addToSparkListenerBus(sc: SparkContext): Unit = {
-    sc.listenerBus.addToStatusQueue(new GlutenSQLAppStatusListener(sc.getConf))
+    sc.listenerBus.addToStatusQueue(new GlutenSQLAppStatusListener())
   }
 }

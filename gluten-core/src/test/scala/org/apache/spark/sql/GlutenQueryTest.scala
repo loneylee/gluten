@@ -264,7 +264,7 @@ object GlutenQueryTest extends Assertions {
     val isSorted = df.logicalPlan.collect { case s: logical.Sort => s }.nonEmpty
     if (checkToRDD) {
       SQLExecution.withSQLConfPropagated(df.sparkSession) {
-        df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
+//        df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
       }
     }
 

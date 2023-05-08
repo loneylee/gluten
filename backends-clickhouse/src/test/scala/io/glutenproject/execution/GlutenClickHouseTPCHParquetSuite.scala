@@ -218,7 +218,7 @@ class GlutenClickHouseTPCHParquetSuite extends GlutenClickHouseTPCHAbstractSuite
           case scanExec: BasicScanExecTransformer => scanExec
         }
         assert(scanExec.size == 8)
-        sleep(100000000)
+//        sleep(100000000)
     }
   }
 

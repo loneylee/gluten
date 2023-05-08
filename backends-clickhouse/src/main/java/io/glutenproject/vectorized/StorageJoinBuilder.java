@@ -55,7 +55,7 @@ public class StorageJoinBuilder implements AutoCloseable {
     this.customizeBufferSize = customizeBufferSize;
   }
 
-  private native void nativeBuild(String buildHashTableId,
+  private native long nativeBuild(String buildHashTableId,
                                   ShuffleInputStream in,
                                   int customizeBufferSize,
                                   String joinKeys,
@@ -65,7 +65,7 @@ public class StorageJoinBuilder implements AutoCloseable {
   /**
    * build storage join object
    */
-  public void build() {
+  public long build() {
     ConverterUtils$ converter = ConverterUtils$.MODULE$;
     String join = converter.convertJoinType(broadCastContext.joinType());
     List<Expression> keys = null;
@@ -99,7 +99,7 @@ public class StorageJoinBuilder implements AutoCloseable {
       nStructBuilder.addNames(name);
     }
     byte[] structure = nStructBuilder.build().toByteArray();
-    nativeBuild(
+    return nativeBuild(
         broadCastContext.buildHashTableId(),
         in,
         this.customizeBufferSize,

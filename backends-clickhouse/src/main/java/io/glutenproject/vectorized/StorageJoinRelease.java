@@ -22,9 +22,9 @@ public class StorageJoinRelease {
     public StorageJoinRelease() {
     }
 
-    private native void nativeCleanBuildHashTable(String buildHashTableId);
+    private native void nativeCleanBuildHashTable(String hashTableId, long hashTableData);
 
-    public void cleanBuildHashTable(String buildHashTableId) {
-        nativeCleanBuildHashTable(buildHashTableId);
+    public void cleanBuildHashTable(String hashTableId, long hashTableData) {
+        nativeCleanBuildHashTable(hashTableId, hashTableData);
     }
 }
