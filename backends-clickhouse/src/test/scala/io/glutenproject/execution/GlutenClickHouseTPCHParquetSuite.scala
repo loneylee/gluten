@@ -42,7 +42,7 @@ class GlutenClickHouseTPCHParquetSuite extends GlutenClickHouseTPCHAbstractSuite
       .set("spark.sql.shuffle.partitions", "5")
       .set("spark.sql.autoBroadcastJoinThreshold", "10MB")
       .set("spark.gluten.sql.columnar.backend.ch.use.v2", "false")
-      .set("spark.gluten.sql.columnar.backend.ch.runtime_conf.logger.level", "debug")
+      .set("spark.gluten.sql.columnar.backend.ch.runtime_config.logger.level", "debug")
   }
 
   override protected val createNullableTables = true
