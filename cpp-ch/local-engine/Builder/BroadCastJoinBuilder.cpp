@@ -1,10 +1,10 @@
 #include "BroadCastJoinBuilder.h"
 #include <Parser/SerializedPlanParser.h>
-#include <Poco/StringTokenizer.h>
-#include <Common/ThreadPool.h>
-#include <Common/JNIUtils.h>
-#include <Common/logger_useful.h>
 #include <jni/SmartPointerWrapper.h>
+#include <Poco/StringTokenizer.h>
+#include <Common/JNIUtils.h>
+#include <Common/ThreadPool.h>
+#include <Common/logger_useful.h>
 
 
 namespace DB
@@ -19,7 +19,7 @@ namespace local_engine
 {
 using namespace DB;
 
-std::unordered_map<std::string, std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>>> BroadCastJoinBuilder::storage_join_map;
+std::unordered_map<std::string, std::shared_ptr<StorageJoinWrapper>> BroadCastJoinBuilder::storage_join_map;
 std::mutex BroadCastJoinBuilder::join_lock_mutex;
 
 struct StorageJoinContext
@@ -33,7 +33,7 @@ struct StorageJoinContext
     DB::ColumnsDescription columns;
 };
 
-std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> BroadCastJoinBuilder::buildJoin(
+std::shared_ptr<StorageJoinWrapper> BroadCastJoinBuilder::buildJoin(
     const std::string & key,
     jobject input,
     size_t io_buffer_size,
@@ -42,11 +42,18 @@ std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> BroadCastJoinBuil
     DB::JoinStrictness strictness_,
     const DB::ColumnsDescription & columns_)
 {
-    std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> wrapper = nullptr;
+    std::shared_ptr<StorageJoinWrapper> wrapper = nullptr;
 
     {
         std::lock_guard build_lock(join_lock_mutex);
-        wrapper = std::make_shared<StorageJoinWrapper<StorageJoinFromReadBuffer>>();
+        if (unlikely(storage_join_map.contains(key)))
+        {
+            std::shared_ptr<StorageJoinFromReadBuffer> cache = storage_join_map.at(key)->getStorage();
+            wrapper = std::make_shared<StorageJoinWrapper>(cache);
+        }
+        else
+            wrapper = std::make_shared<StorageJoinWrapper>();
+
         storage_join_map.emplace(key, wrapper);
     }
 
@@ -60,11 +67,15 @@ void BroadCastJoinBuilder::cleanBuildHashTable(const std::string & hash_table_id
 
     if (storage_join_map.contains(hash_table_id))
     {
-        std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> cache = storage_join_map.at(hash_table_id);
+        std::shared_ptr<StorageJoinWrapper> cache = storage_join_map.at(hash_table_id);
         if (instance == reinterpret_cast<jlong>(cache.get()))
         {
             storage_join_map.erase(hash_table_id);
         }
+    }
+
+    for (const auto & item : storage_join_map) {
+        LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table data is {}", item.first);
     }
 
     LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table size is {}", storage_join_map.size());
@@ -75,7 +86,7 @@ std::shared_ptr<StorageJoinFromReadBuffer> BroadCastJoinBuilder::getJoin(const s
 {
     if (storage_join_map.contains(key))
     {
-        return storage_join_map.at(key)->get();
+        return storage_join_map.at(key)->getStorage();
     }
     else
     {
@@ -83,7 +94,7 @@ std::shared_ptr<StorageJoinFromReadBuffer> BroadCastJoinBuilder::getJoin(const s
     }
 }
 
-std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> BroadCastJoinBuilder::buildJoin(
+std::shared_ptr<StorageJoinWrapper> BroadCastJoinBuilder::buildJoin(
     const std::string & key,
     jobject input,
     size_t io_buffer_size,
@@ -136,9 +147,7 @@ void BroadCastJoinBuilder::clean()
     storage_join_map.clear();
 }
 
-
-template <typename T>
-void StorageJoinWrapper<T>::build(
+void StorageJoinWrapper::build(
     const std::string & key,
     jobject input,
     size_t io_buffer_size,
@@ -156,7 +165,7 @@ void StorageJoinWrapper<T>::build(
             // use another thread, exclude broadcast memory allocation from current memory tracker
             auto func = [this, &context]() -> void
             {
-                storage_join = std::make_shared<T>(
+                storage_join = std::make_shared<StorageJoinFromReadBuffer>(
                     std::make_unique<ReadBufferFromJavaInputStream>(context.input, context.io_buffer_size),
                     StorageID("default", context.key),
                     context.key_names,

@@ -17,7 +17,9 @@
 package io.glutenproject.execution
 
 import io.glutenproject.vectorized.StorageJoinRelease
+
 import org.apache.spark.internal.Logging
+
 import org.sparkproject.guava.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 
 import java.util.concurrent.TimeUnit
@@ -39,7 +41,5 @@ object CHBroadcastBuildSideRDD extends Logging {
           }
         }
       )
-      .build[String, String]();
-
-//  val buildSideRelationCache = new ConcurrentHashMap[String, Long]()
+      .build[String, String]()
 }

@@ -21,6 +21,7 @@ package org.apache.spark.sql
  * Why we need a GlutenQueryTest when we already have QueryTest?
  * 1. We need to modify the way org.apache.spark.sql.CHQueryTest#compare compares double
  */
+import io.glutenproject.backendsapi.BackendsApiManager
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.util._
 import org.apache.spark.sql.execution.SQLExecution
@@ -31,6 +32,7 @@ import org.scalatest.Assertions
 
 import java.util.TimeZone
 import scala.collection.JavaConverters._
+import scala.reflect.runtime.universe.{newTermName, typeOf}
 
 
 abstract class GlutenQueryTest extends PlanTest {
@@ -246,7 +248,7 @@ object GlutenQueryTest extends Assertions {
       case None =>
     }
   }
-
+  import scala.reflect.runtime.universe
   /**
    * Runs the plan and makes sure the answer matches the expected result.
    * If there was exception during the execution or the contents of the DataFrame does not
@@ -264,10 +266,14 @@ object GlutenQueryTest extends Assertions {
     val isSorted = df.logicalPlan.collect { case s: logical.Sort => s }.nonEmpty
     if (checkToRDD) {
       SQLExecution.withSQLConfPropagated(df.sparkSession) {
-//        df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
+        val executionId = getNextExecutionId()
+        SQLExecution.withExecutionId(df.sparkSession, getNextExecutionId()) {
+          df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
+        }
+        BackendsApiManager.getContextApiInstance().onExecutionEnd(executionId)
       }
     }
-
+//    Some("")
     val sparkAnswer = try df.collect().toSeq catch {
       case e: Exception =>
         val errorMessage =
@@ -294,6 +300,17 @@ object GlutenQueryTest extends Assertions {
     }
   }
 
+  def getNextExecutionId(): String = {
+    val classMirror = universe.runtimeMirror(SQLExecution.getClass.getClassLoader)
+    val staticMirror = classMirror.staticModule(SQLExecution.getClass.getName)
+    val moduleMirror = classMirror.reflectModule(staticMirror)
+    val objectMirror = classMirror.reflect(moduleMirror.instance)
+    val strInObjSymbol = objectMirror.symbol.typeSignature
+      .member(universe.TermName("nextExecutionId")).asMethod
+    val nextExecutionId = objectMirror.reflectMethod(strInObjSymbol)
+    val newid = nextExecutionId.apply().toString
+    newid
+  }
 
   def prepareAnswer(answer: Seq[Row], isSorted: Boolean): Seq[Row] = {
     // Converts data to types that we can do equality comparison using Scala collections.

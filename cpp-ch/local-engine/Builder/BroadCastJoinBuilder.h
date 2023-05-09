@@ -4,10 +4,11 @@
 
 namespace local_engine
 {
-template <typename T>
-class StorageJoinWrapper{
+class StorageJoinWrapper
+{
 public:
-    explicit StorageJoinWrapper()= default;;
+    explicit StorageJoinWrapper() = default;
+    explicit StorageJoinWrapper(std::shared_ptr<StorageJoinFromReadBuffer> & storage_join_) : storage_join(std::move(storage_join_)){};
 
     void build(
         const std::string & key,
@@ -18,19 +19,18 @@ public:
         DB::JoinStrictness strictness_,
         const DB::ColumnsDescription & columns_);
 
-    std::shared_ptr<T> get() const { return storage_join; }
+    std::shared_ptr<StorageJoinFromReadBuffer> getStorage() { return storage_join; };
 
 private:
-    std::shared_ptr<T> storage_join;
+    std::shared_ptr<StorageJoinFromReadBuffer> storage_join;
     std::mutex build_lock_mutex;
-
 };
 
 
 class BroadCastJoinBuilder
 {
 public:
-    static std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> buildJoin(
+    static std::shared_ptr<StorageJoinWrapper> buildJoin(
         const std::string & key,
         jobject input,
         size_t io_buffer_size,
@@ -39,7 +39,7 @@ public:
         DB::JoinStrictness strictness_,
         const DB::ColumnsDescription & columns_);
 
-    static std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>> buildJoin(
+    static std::shared_ptr<StorageJoinWrapper> buildJoin(
         const std::string & key,
         jobject input,
         size_t io_buffer_size,
@@ -55,7 +55,7 @@ public:
     static void clean();
 
 private:
-    static std::unordered_map<std::string, std::shared_ptr<StorageJoinWrapper<StorageJoinFromReadBuffer>>> storage_join_map;
+    static std::unordered_map<std::string, std::shared_ptr<StorageJoinWrapper>> storage_join_map;
     static std::mutex join_lock_mutex;
 };
 

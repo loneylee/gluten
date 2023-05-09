@@ -58,5 +58,6 @@ class GlutenSQLAppStatusListener() extends SparkListener with Logging {
     val executionId = event.executionId.toString
     driverEndpointRef.send(GlutenOnExecutionEnd(executionId))
     logTrace(s"Execution $executionId end.")
+    print(s"Execution $executionId end.")
   }
 }

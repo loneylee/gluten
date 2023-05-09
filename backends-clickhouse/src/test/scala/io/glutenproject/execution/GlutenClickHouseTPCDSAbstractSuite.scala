@@ -119,7 +119,7 @@ abstract class GlutenClickHouseTPCDSAbstractSuite extends WholeStageTransformerS
       _spark = SparkSession
         .builder()
         .appName("Gluten-UT-TPC_DS")
-        .master(s"local[8]")
+        .master(s"local[20]")
         .config(sparkConf)
         .getOrCreate()
     }

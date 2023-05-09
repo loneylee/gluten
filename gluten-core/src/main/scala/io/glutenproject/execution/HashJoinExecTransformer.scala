@@ -446,6 +446,8 @@ abstract class BroadcastHashJoinExecTransformer(leftKeys: Seq[Expression],
       buildKeyExprs, joinType, buildPlan.output, buildHashTableId)
 
     val executionId = sparkContext.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)
+    println("*****" + executionId)
+    println("*****" + context.buildHashTableId)
     BackendsApiManager.getContextApiInstance()
       .collectExecutionBroadcastHashTableId(executionId, context.buildHashTableId)
 

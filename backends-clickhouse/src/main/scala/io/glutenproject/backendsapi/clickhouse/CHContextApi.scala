@@ -60,7 +60,7 @@ class CHContextApi extends ContextApi with Logging {
         .forEach(
           resource_id => CHBroadcastBuildSideRDD.buildSideRelationCache.invalidate(resource_id))
     } else {
-      logError(s"ExecutionId not found: $executionId")
+      logWarning(s"Execution id ${executionId} not found. Can't clean resource right now")
     }
   }
 
