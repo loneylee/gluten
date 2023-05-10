@@ -1,6 +1,5 @@
 #include "BroadCastJoinBuilder.h"
 #include <Parser/SerializedPlanParser.h>
-#include <jni/SmartPointerWrapper.h>
 #include <Poco/StringTokenizer.h>
 #include <Common/JNIUtils.h>
 #include <Common/ThreadPool.h>
