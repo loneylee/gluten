@@ -49,6 +49,7 @@ public:
 
     static void cleanBuildHashTable(const std::string & hash_table_id, jlong instance);
 
+    static size_t cachedHashTableCount() { return storage_join_map.size(); };
 
     static std::shared_ptr<StorageJoinFromReadBuffer> getJoin(const std::string & key);
 

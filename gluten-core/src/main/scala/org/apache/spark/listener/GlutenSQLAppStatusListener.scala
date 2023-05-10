@@ -31,7 +31,7 @@ class GlutenSQLAppStatusListener() extends SparkListener with Logging {
   /**
    * If executor was removed, driver endpoint need to remove executor endpoint ref.\n When execution
    * was end, Can't call executor ref again.
-   * @param executorRemoved
+   * @param executorRemoved execution eemoved event
    */
   override def onExecutorRemoved(executorRemoved: SparkListenerExecutorRemoved): Unit = {
     driverEndpointRef.send(GlutenExecutorRemoved(executorRemoved.executorId))
@@ -44,20 +44,26 @@ class GlutenSQLAppStatusListener() extends SparkListener with Logging {
     case _ => // Ignore
   }
 
+  /**
+   * If execution is start, notice gluten executor with some prepare.
+   * execution.
+   *
+   * @param event execution start event
+   */
   private def onExecutionStart(event: SparkListenerSQLExecutionStart): Unit = {
     val executionId = event.executionId.toString
+    driverEndpointRef.send(GlutenOnExecutionStart(executionId))
     logTrace(s"Execution $executionId start.")
   }
 
   /**
    * If execution was end, some backend like CH need to clean resource which is relation to this
    * execution.
-   * @param event
+   * @param event execution end event
    */
   private def onExecutionEnd(event: SparkListenerSQLExecutionEnd): Unit = {
     val executionId = event.executionId.toString
     driverEndpointRef.send(GlutenOnExecutionEnd(executionId))
     logTrace(s"Execution $executionId end.")
-    print(s"Execution $executionId end.")
   }
 }

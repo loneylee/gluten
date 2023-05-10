@@ -42,7 +42,7 @@ class CHContextApi extends ContextApi with Logging {
 
     // Add configs
     conf.set(
-      "spark.gluten.timezone",
+      s"${CHBackendSettings.getBackendConfigPrefix()}.runtime_config.timezone",
       conf.get("spark.sql.session.timeZone", TimeZone.getDefault.getID))
     val initKernel = new CHNativeExpressionEvaluator()
     initKernel.initNative(conf)
@@ -53,14 +53,27 @@ class CHContextApi extends ContextApi with Logging {
     kernel.finalizeNative()
   }
 
-  override def onExecutionEnd(executionId: String): Unit = {
-    if (CHContextApi.executionResourceRelation.containsKey(executionId)) {
+  override def onExecutionStart(executionId: String): Unit = {
+    if (executionId != null
+      && !CHContextApi.executionResourceRelation.containsKey(executionId)) {
       CHContextApi.executionResourceRelation
-        .get(executionId)
-        .forEach(
-          resource_id => CHBroadcastBuildSideRDD.buildSideRelationCache.invalidate(resource_id))
+        .computeIfAbsent(executionId, _ => new util.HashSet[String]())
     } else {
+      logWarning(s"Execution Id is null. Resources maybe not clean after execution end.")
+    }
+  }
+
+  override def onExecutionEnd(executionId: String): Unit = {
+    if (executionId == null) {
       logWarning(s"Execution id ${executionId} not found. Can't clean resource right now")
+    } else {
+      val resources = CHContextApi.executionResourceRelation.get(executionId)
+      if (resources != null) {
+        // clean broadcast hash data
+        resources.forEach(resource_id =>
+          CHBroadcastBuildSideRDD.buildSideRelationCache.invalidate(resource_id))
+        CHContextApi.executionResourceRelation.remove(executionId)
+      }
     }
   }
 
@@ -70,21 +83,20 @@ class CHContextApi extends ContextApi with Logging {
     if (executionId != null) {
       if (!CHContextApi.executionResourceRelation.containsKey(executionId)) {
         CHContextApi.executionResourceRelation
-          .computeIfAbsent(
-            executionId,
-            _ => {
-              new util.HashSet[String]()
-            })
+          .computeIfAbsent(executionId, _ => new util.HashSet[String]())
       }
       CHContextApi.executionResourceRelation.get(executionId).add(buildHashTableId)
     } else {
-      logWarning(s"Execution Id is null. Build hash table maybe not clean after execution end.")
+      logWarning(
+        s"Can't not trace broadcast hash table data ${buildHashTableId}" +
+          s" because execution id is null." +
+          s" Will clean up until expire time.")
     }
   }
 }
 
 object CHContextApi extends Logging {
   // key: executionId, value: resourceIds
-  val executionResourceRelation = new ConcurrentHashMap[String, Set[String]]()
+  private val executionResourceRelation = new ConcurrentHashMap[String, Set[String]]()
 
 }

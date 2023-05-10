@@ -812,13 +812,20 @@ JNIEXPORT jlong Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeBuild(
     LOCAL_ENGINE_JNI_METHOD_END(env,)
 }
 
-void Java_io_glutenproject_vectorized_StorageJoinRelease_nativeCleanBuildHashTable(
-    JNIEnv * env, jobject, jstring hash_table_id_, jlong instance)
+void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeCleanBuildHashTable(
+    JNIEnv * env, jclass, jstring hash_table_id_, jlong instance)
 {
     LOCAL_ENGINE_JNI_METHOD_START
     auto hash_table_id = jstring2string(env, hash_table_id_);
     local_engine::BroadCastJoinBuilder::cleanBuildHashTable(hash_table_id, instance);
-    LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Clean broadcast hash data success.");
+    LOCAL_ENGINE_JNI_METHOD_END(env,)
+}
+
+void Java_io_glutenproject_vectorized_StorageJoinBuilder_nativeCachedHashTableCount(
+    JNIEnv * env, jclass)
+{
+    LOCAL_ENGINE_JNI_METHOD_START
+    return local_engine::BroadCastJoinBuilder::cachedHashTableCount();
     LOCAL_ENGINE_JNI_METHOD_END(env,)
 }
 

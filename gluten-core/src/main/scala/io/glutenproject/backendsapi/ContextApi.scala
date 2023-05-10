@@ -24,6 +24,8 @@ trait ContextApi {
 
   def shutdown(): Unit = {}
 
+  def onExecutionStart(executionId: String): Unit = {}
+
   def onExecutionEnd(executionId: String): Unit = {}
 
   def collectExecutionBroadcastHashTableId(executionId: String,

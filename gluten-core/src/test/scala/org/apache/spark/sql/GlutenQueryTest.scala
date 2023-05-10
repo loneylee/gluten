@@ -21,6 +21,7 @@ package org.apache.spark.sql
  * Why we need a GlutenQueryTest when we already have QueryTest?
  * 1. We need to modify the way org.apache.spark.sql.CHQueryTest#compare compares double
  */
+
 import io.glutenproject.backendsapi.BackendsApiManager
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.util._
@@ -32,7 +33,6 @@ import org.scalatest.Assertions
 
 import java.util.TimeZone
 import scala.collection.JavaConverters._
-import scala.reflect.runtime.universe.{newTermName, typeOf}
 
 
 abstract class GlutenQueryTest extends PlanTest {
@@ -212,7 +212,7 @@ abstract class GlutenQueryTest extends PlanTest {
   def assertCached(query: Dataset[_], cachedName: String, storageLevel: StorageLevel): Unit = {
     val planWithCaching = query.queryExecution.withCachedData
     val matched = planWithCaching.collectFirst { case cached: InMemoryRelation =>
-      val cacheBuilder = cached.asInstanceOf[InMemoryRelation].cacheBuilder
+      val cacheBuilder = cached.cacheBuilder
       cachedName == cacheBuilder.tableName.get &&
         (storageLevel == cacheBuilder.storageLevel)
     }.getOrElse(false)
@@ -265,15 +265,13 @@ object GlutenQueryTest extends Assertions {
                                     checkToRDD: Boolean = true): Option[String] = {
     val isSorted = df.logicalPlan.collect { case s: logical.Sort => s }.nonEmpty
     if (checkToRDD) {
-      SQLExecution.withSQLConfPropagated(df.sparkSession) {
-        val executionId = getNextExecutionId()
-        SQLExecution.withExecutionId(df.sparkSession, getNextExecutionId()) {
-          df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
-        }
-        BackendsApiManager.getContextApiInstance().onExecutionEnd(executionId)
+      val executionId = getNextExecutionId
+      SQLExecution.withExecutionId(df.sparkSession, executionId) {
+        df.rdd.count() // Also attempt to deserialize as an RDD [SPARK-15791]
       }
+      BackendsApiManager.getContextApiInstance().onExecutionEnd(executionId)
     }
-//    Some("")
+
     val sparkAnswer = try df.collect().toSeq catch {
       case e: Exception =>
         val errorMessage =
@@ -300,7 +298,7 @@ object GlutenQueryTest extends Assertions {
     }
   }
 
-  def getNextExecutionId(): String = {
+  def getNextExecutionId: String = {
     val classMirror = universe.runtimeMirror(SQLExecution.getClass.getClassLoader)
     val staticMirror = classMirror.staticModule(SQLExecution.getClass.getName)
     val moduleMirror = classMirror.reflectModule(staticMirror)
@@ -374,7 +372,7 @@ object GlutenQueryTest extends Assertions {
                     expectedRows: Seq[Row],
                     sparkAnswer: Seq[Row]): Option[String] = {
     if (!prepareAnswer(expectedRows, true).toSet.subsetOf(prepareAnswer(sparkAnswer, true).toSet)) {
-      return Some(genError(expectedRows, sparkAnswer, true))
+      return Some(genError(expectedRows, sparkAnswer, isSorted = true))
     }
     None
   }

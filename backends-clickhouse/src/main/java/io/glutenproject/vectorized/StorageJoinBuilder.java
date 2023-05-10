@@ -33,6 +33,11 @@ import org.apache.spark.sql.catalyst.expressions.Attribute;
 import org.apache.spark.sql.catalyst.expressions.Expression;
 
 public class StorageJoinBuilder implements AutoCloseable {
+
+  public static native int nativeCachedHashTableCount();
+
+  public static native void nativeCleanBuildHashTable(String hashTableId, long hashTableData);
+
   private ShuffleInputStream in;
 
   private int customizeBufferSize;

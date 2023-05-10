@@ -25,8 +25,6 @@ object BackendsApiManager {
 
   private case class Wrapper(
       glutenBackendName: String,
-      initializerApiInstance: InitializerApi,
-      shutdownApiInstance: ShutdownApi,
       contextApi: ContextApi,
       iteratorApiInstance: IteratorApi,
       sparkPlanExecApiInstance: SparkPlanExecApi,
@@ -52,8 +50,6 @@ object BackendsApiManager {
     val backend = discoveredBackends.head
     Wrapper(
       backend.name(),
-      backend.initializerApi(),
-      backend.shutdownApi(),
       backend.contextApi(),
       backend.iteratorApi(),
       backend.sparkPlanExecApi(),
@@ -77,14 +73,6 @@ object BackendsApiManager {
 
   def getBackendName: String = {
     manager.glutenBackendName
-  }
-
-  def getInitializerApiInstance: InitializerApi = {
-    manager.initializerApiInstance
-  }
-
-  def getShutdownApiInstance: ShutdownApi = {
-    manager.shutdownApiInstance
   }
 
   def getIteratorApiInstance: IteratorApi = {

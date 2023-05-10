@@ -20,10 +20,6 @@ package io.glutenproject.backendsapi
 trait Backend {
   def name(): String
 
-  def initializerApi(): InitializerApi
-
-  def shutdownApi(): ShutdownApi
-
   def iteratorApi(): IteratorApi
 
   def sparkPlanExecApi(): SparkPlanExecApi

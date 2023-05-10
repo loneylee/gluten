@@ -24,17 +24,26 @@ import org.apache.spark.rpc.GlutenRpcMessages._
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * The gluten driver endpoint is responsible for communicating with the executor. Executor will
+ * register with the driver when it starts.
+ */
 class GlutenDriverEndpoint extends IsolatedRpcEndpoint with Logging {
   override val rpcEnv: RpcEnv = SparkEnv.get.rpcEnv
 
   protected val totalRegisteredExecutors = new AtomicInteger(0)
 
+  // keep executorRef on memory
   private val executorDataMap = new ConcurrentHashMap[String, ExecutorData]
 
   val driverEndpoint: RpcEndpointRef =
     rpcEnv.setupEndpoint(GlutenRpcConstants.GLUTEN_DRIVER_ENDPOINT_NAME, this)
 
   override def receive: PartialFunction[Any, Unit] = {
+    case GlutenOnExecutionStart(executionId) =>
+      executorDataMap.forEach(
+        (_, executor) => executor.executorEndpointRef.send(GlutenOnExecutionStart(executionId)))
+
     case GlutenOnExecutionEnd(executionId) =>
       executorDataMap.forEach(
         (_, executor) => executor.executorEndpointRef.send(GlutenOnExecutionEnd(executionId)))
@@ -74,10 +83,11 @@ class GlutenDriverEndpoint extends IsolatedRpcEndpoint with Logging {
         // Note: some tests expect the reply to come after we put the executor in the map
         context.reply(true)
       }
+
   }
 
   override def onStart(): Unit = {
-    logTrace("Start GlutenDriverEndpoint")
+    logTrace("Start GlutenDriverEndpoint.")
   }
 }
 

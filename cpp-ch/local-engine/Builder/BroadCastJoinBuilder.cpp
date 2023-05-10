@@ -71,6 +71,7 @@ void BroadCastJoinBuilder::cleanBuildHashTable(const std::string & hash_table_id
         if (instance == reinterpret_cast<jlong>(cache.get()))
         {
             storage_join_map.erase(hash_table_id);
+            LOG_DEBUG(&Poco::Logger::get("BroadCastJoinBuilder"), "Broadcast hash table id {} removed.", storage_join_map.size());
         }
     }
 

@@ -18,12 +18,11 @@ package io.glutenproject.execution
 
 import io.glutenproject.GlutenConfig
 import io.glutenproject.utils.UTSystemParameters
-
+import io.glutenproject.vectorized.StorageJoinBuilder
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.datasources.v2.clickhouse.ClickHouseLog
-
 import org.apache.commons.io.FileUtils
 
 import java.io.File
@@ -63,6 +62,11 @@ abstract class GlutenClickHouseTPCHAbstractSuite extends WholeStageTransformerSu
     } else {
       createTPCHNotNullTables()
     }
+  }
+
+  override def afterEach(): Unit = {
+    super.afterEach()
+    assert(StorageJoinBuilder.nativeCachedHashTableCount == 0)
   }
 
   override protected def createTPCHNotNullTables(): Unit = {

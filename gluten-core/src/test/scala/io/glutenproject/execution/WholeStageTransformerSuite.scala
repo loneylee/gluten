@@ -126,9 +126,7 @@ abstract class WholeStageTransformerSuite extends GlutenQueryTest with SharedSpa
       tpchQueries: String,
       queriesResults: String,
       compareResult: Boolean = true)(customCheck: DataFrame => Unit): Unit = {
-    val sqlNum = "q" + "%02d".format(queryNum)
-    val sqlFile = tpchQueries + "/" + sqlNum + ".sql"
-    val sqlStr = Source.fromFile(new File(sqlFile), "UTF-8").mkString
+    val (sqlNum, sqlStr) = getTPCHSql(queryNum, tpchQueries)
     val df = spark.sql(sqlStr)
     val result = df.collect()
     if (compareResult) {
@@ -142,6 +140,11 @@ abstract class WholeStageTransformerSuite extends GlutenQueryTest with SharedSpa
     customCheck(df)
   }
 
+  protected def getTPCHSql(queryNum: Int, tpchQueries: String): (String, String) = {
+    val sqlNum = "q" + "%02d".format(queryNum)
+    val sqlFile = tpchQueries + "/" + sqlNum + ".sql"
+    (sqlNum, Source.fromFile(new File(sqlFile), "UTF-8").mkString)
+  }
 
   protected def runSql(sql: String)
                             (customCheck: DataFrame => Unit): Seq[Row] = {

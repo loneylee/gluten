@@ -16,12 +16,14 @@
  */
 package io.glutenproject.execution
 
+import io.glutenproject.backendsapi.clickhouse.CHBackendSettings
 import io.glutenproject.extension.GlutenPlan
-import jodd.util.ThreadUtil.sleep
+import io.glutenproject.vectorized.StorageJoinBuilder
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.catalyst.optimizer.BuildLeft
 import org.apache.spark.sql.functions.{col, rand, when}
+import org.scalatest.time.SpanSugar.convertIntToGrainOfTime
 
 import java.io.File
 
@@ -837,6 +839,19 @@ class GlutenClickHouseTPCHParquetSuite extends GlutenClickHouseTPCHAbstractSuite
         |""".stripMargin
     compareResultsAgainstVanillaSpark(sql, true, { _ => })
   }
+
+//  test("broadcast hash data clean by expried") {
+//    // expired 10 SECONDS
+//    val (_, sqlStr) = getTPCHSql(2, tpchQueries)
+//    val df = spark.sql(sqlStr)
+//    df.rdd.count()
+//    eventually(timeout(300.seconds), interval(12.seconds)) {
+//      CHBroadcastBuildSideRDD.buildSideRelationCache.asMap().
+//        forEach((key, _) => CHBroadcastBuildSideRDD.buildSideRelationCache.getIfPresent(key))
+//
+//      assert(StorageJoinBuilder.nativeCachedHashTableCount == 0)
+//    }
+//  }
 
   override protected def runTPCHQuery(
       queryNum: Int,

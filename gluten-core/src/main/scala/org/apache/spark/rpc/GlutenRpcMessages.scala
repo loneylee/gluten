@@ -25,6 +25,8 @@ object GlutenRpcMessages {
       executorRef: RpcEndpointRef
   ) extends GlutenRpcMessage
 
+  case class GlutenOnExecutionStart(executionId: String) extends GlutenRpcMessage
+
   case class GlutenOnExecutionEnd(executionId: String) extends GlutenRpcMessage
 
   case class GlutenExecutorRemoved(executorId: String) extends GlutenRpcMessage
