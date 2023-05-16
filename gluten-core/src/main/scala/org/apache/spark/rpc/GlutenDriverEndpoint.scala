@@ -129,6 +129,11 @@ object GlutenDriverEndpoint extends Logging{
   def invalidateResourceRelation(executionId: String): Unit = {
     executionResourceRelation.invalidate(executionId)
   }
+
+  // visible by test
+  def cleanUpResourceRelation(): Unit = {
+    executionResourceRelation.cleanUp()
+  }
 }
 
 private class ExecutorData(val executorEndpointRef: RpcEndpointRef) {}

@@ -22,6 +22,7 @@ import io.glutenproject.vectorized.StorageJoinBuilder
 
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
+import org.apache.spark.rpc.GlutenDriverEndpoint
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.datasources.v2.clickhouse.ClickHouseLog
 
@@ -528,6 +529,7 @@ abstract class GlutenClickHouseTPCHAbstractSuite extends WholeStageTransformerSu
     // guava cache invalidate event trigger remove operation may in seconds delay, so wait a bit
     // normally this doesn't take more than 1s
     eventually(timeout(60.seconds), interval(1.seconds)) {
+      GlutenDriverEndpoint.cleanUpResourceRelation()
       CHBroadcastBuildSideCache.cleanUpHashtable()
       assert(StorageJoinBuilder.nativeCachedHashTableCount == 0)
     }
