@@ -63,6 +63,7 @@ class GlutenExecutorEndpoint(val executorId: String, val conf: SparkConf)
     case GlutenCleanExecutionResource(executionId, hashIds) =>
       BackendsApiManager.getContextApiInstance
         .cleanExecutionBroadcastHashtable(executionId, hashIds)
+      logWarning(s"Do cleanExecutionBroadcastHashtable $executionId end")
 
     case e =>
       logError(s"Received unexpected message. $e")

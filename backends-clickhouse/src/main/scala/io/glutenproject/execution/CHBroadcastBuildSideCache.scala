@@ -64,6 +64,7 @@ object CHBroadcastBuildSideCache extends Logging {
     if (v != null) {
       // Cleanup operations on the backend are idempotent.
       buildSideRelationCache.invalidate(broadcastHashtableId)
+      logWarning(s"Do invalidateBroadcastHashtable $broadcastHashtableId end")
     }
   }
 
@@ -73,6 +74,7 @@ object CHBroadcastBuildSideCache extends Logging {
   }
 
   private def cleanBuildHashTable(key: String, value: Long): Unit = {
+    logWarning(s"Do cleanBuildHashTable $key end")
     StorageJoinBuilder.nativeCleanBuildHashTable(key, value)
     logTrace(
       s"Clean build hash table $key success." +

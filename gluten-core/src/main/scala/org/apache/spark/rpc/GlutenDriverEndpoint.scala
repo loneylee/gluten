@@ -49,6 +49,7 @@ class GlutenDriverEndpoint extends IsolatedRpcEndpoint with Logging {
 
     case GlutenOnExecutionEnd(executionId) =>
       GlutenDriverEndpoint.executionResourceRelation.invalidate(executionId)
+      logWarning(s"Do GlutenOnExecutionEnd $executionId end")
 
     case GlutenExecutorRemoved(executorId) =>
       GlutenDriverEndpoint.executorDataMap.remove(executorId)
@@ -128,11 +129,6 @@ object GlutenDriverEndpoint extends Logging{
 
   def invalidateResourceRelation(executionId: String): Unit = {
     executionResourceRelation.invalidate(executionId)
-  }
-
-  // visible by test
-  def cleanUpResourceRelation(): Unit = {
-    executionResourceRelation.cleanUp()
   }
 }
 
