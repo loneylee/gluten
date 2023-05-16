@@ -529,6 +529,7 @@ abstract class GlutenClickHouseTPCHAbstractSuite extends WholeStageTransformerSu
     // guava cache invalidate event trigger remove operation may in seconds delay, so wait a bit
     // normally this doesn't take more than 1s
     eventually(timeout(60.seconds), interval(1.seconds)) {
+      GlutenDriverEndpoint.cleanUpExecutionRelation()
       CHBroadcastBuildSideCache.cleanUpHashtable()
       assert(StorageJoinBuilder.nativeCachedHashTableCount == 0)
     }

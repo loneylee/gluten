@@ -127,6 +127,11 @@ object GlutenDriverEndpoint extends Logging{
     resources.add(resourceId)
   }
 
+  // visible by test
+  def cleanUpExecutionRelation(): Unit = {
+    executionResourceRelation.cleanUp()
+  }
+
   def invalidateResourceRelation(executionId: String): Unit = {
     executionResourceRelation.invalidate(executionId)
   }
