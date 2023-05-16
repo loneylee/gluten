@@ -233,6 +233,10 @@ abstract class GlutenQueryTest extends PlanTest {
     assert(query.queryExecution.executedPlan.missingInput.isEmpty,
       s"The physical plan has missing inputs:\n${query.queryExecution.executedPlan}")
   }
+
+  protected def waitListenerBusUntilEmpty(sk: SparkSession): Unit = {
+    sk.sparkContext.listenerBus.waitUntilEmpty()
+  }
 }
 
 object GlutenQueryTest extends Assertions {
