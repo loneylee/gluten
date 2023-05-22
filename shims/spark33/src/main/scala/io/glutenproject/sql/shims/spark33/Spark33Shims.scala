@@ -84,8 +84,8 @@ class Spark33Shims extends SparkShims {
       readPartitionSchema: StructType,
       options: CaseInsensitiveStringMap,
       partitionFilters: Seq[Expression],
-      dataFilters: Seq[Expression]): TextScan = {
-    new TextScan(
+      dataFilters: Seq[Expression]): Scan = {
+    TextScan(
       sparkSession,
       fileIndex,
       dataSchema,

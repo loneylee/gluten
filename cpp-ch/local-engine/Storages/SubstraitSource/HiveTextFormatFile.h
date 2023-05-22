@@ -14,17 +14,21 @@ namespace local_engine
 class HiveTextFormatFile : public FormatFile
 {
 public:
-    explicit HiveTextFormatFile(DB::ContextPtr context_, const substrait::ReadRel::LocalFiles::FileOrFiles & file_info_, ReadBufferBuilderPtr read_buffer_builder_);
+    explicit HiveTextFormatFile(
+        DB::ContextPtr context_, const substrait::ReadRel::LocalFiles::FileOrFiles & file_info_, ReadBufferBuilderPtr read_buffer_builder_);
     ~HiveTextFormatFile() override = default;
     FormatFile::InputFormatPtr createInputFormat(const DB::Block & header) override;
-    std::optional<size_t> getTotalRows() override  { return 1; }
+    std::optional<size_t> getTotalRows() override { return 1; }
     bool supportSplit() override { return true; }
+
+private:
+    DB::FormatSettings createFormatSettings();
 };
 
 class GlutenHiveTextFormatReader final : public DB::CSVFormatReader
 {
 public:
-    explicit GlutenHiveTextFormatReader(DB::PeekableReadBuffer & buf_, const DB::FormatSettings & format_settings_);
+    explicit GlutenHiveTextFormatReader(DB::PeekableReadBuffer & buf_,const DB::Block & header, const DB::FormatSettings & format_settings_);
 private:
     std::vector<String> readNames() override;
     std::vector<String> input_field_names;

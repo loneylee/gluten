@@ -4,30 +4,24 @@
 #include <string>
 #include <utility>
 
-#include <Core/Defines.h>
+#include <Columns/ColumnNullable.h>
+#include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/Serializations/SerializationDate32.h>
+#include <DataTypes/Serializations/SerializationNullable.h>
 #include <Formats/FormatSettings.h>
-#include <IO/SeekableReadBuffer.h>
 #include <IO/PeekableReadBuffer.h>
-#include <Storages/HDFS/ReadBufferFromHDFS.h>
+#include <IO/SeekableReadBuffer.h>
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Storages/HDFS/ReadBufferFromHDFS.h>
+#include <Storages/Serializations/ExcelSerialization.h>
+
 
 namespace local_engine
 {
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
-}
-
-static DB::FormatSettings updateFormatSettings(const DB::FormatSettings & settings, const DB::Block & header)
-{
-    DB::FormatSettings updated = settings;
-    updated.skip_unknown_fields = true;
-    updated.with_names_use_header = true;
-    updated.date_time_input_format = DB::FormatSettings::DateTimeInputFormat::BestEffort;
-    updated.csv.delimiter = updated.hive_text.fields_delimiter;
-    if (settings.hive_text.input_field_names.empty())
-        updated.hive_text.input_field_names = header.getNames();
-    return updated;
 }
 
 HiveTextFormatFile::HiveTextFormatFile(DB::ContextPtr context_, const substrait::ReadRel::LocalFiles::FileOrFiles & file_info_, ReadBufferBuilderPtr read_buffer_builder_)
@@ -37,17 +31,44 @@ FormatFile::InputFormatPtr HiveTextFormatFile::createInputFormat(const DB::Block
 {
     auto res = std::make_shared<FormatFile::InputFormat>();
     res->read_buffer = std::move(read_buffer_builder->build(file_info, true));
+
+    DB::FormatSettings format_settings = createFormatSettings();
+    size_t max_block_size = file_info.text().max_block_size();
+    DB::RowInputFormatParams in_params = {max_block_size};
+
+    std::shared_ptr<GlutenHiveTextRowInputFormat> hive_txt_input_format = std::make_shared<GlutenHiveTextRowInputFormat>(
+        header, *(res->read_buffer), in_params, format_settings, file_info.text().schema());
+    res->input = hive_txt_input_format;
+    return res;
+}
+
+DB::FormatSettings HiveTextFormatFile::createFormatSettings()
+{
     DB::FormatSettings format_settings = DB::getFormatSettings(context);
     format_settings.with_names_use_header = true;
     format_settings.skip_unknown_fields = true;
-    std::string text_field_delimiter = file_info.text().field_delimiter();
-    size_t max_block_size = file_info.text().max_block_size();
-    format_settings.hive_text.fields_delimiter = *text_field_delimiter.data();
-    DB::RowInputFormatParams in_params = {max_block_size};
-    std::shared_ptr<local_engine::GlutenHiveTextRowInputFormat> hive_txt_input_format = 
-        std::make_shared<local_engine::GlutenHiveTextRowInputFormat>(header, *(res->read_buffer), in_params, format_settings, file_info.text().schema());
-    res->input = hive_txt_input_format;
-    return res;
+    std::string delimiter = file_info.text().field_delimiter();
+    format_settings.csv.delimiter = *delimiter.data();
+    format_settings.csv.skip_first_lines = file_info.text().header();
+
+    char quote = *file_info.text().quote().data();
+    if (quote == '\'')
+    {
+        format_settings.csv.allow_single_quotes = true;
+        format_settings.csv.allow_double_quotes = false;
+    }
+    else if (quote == '"')
+    {
+        format_settings.csv.allow_single_quotes = false;
+        format_settings.csv.allow_double_quotes = true;
+    }
+    else
+    {
+        format_settings.csv.allow_single_quotes = false;
+        format_settings.csv.allow_double_quotes = false;
+    }
+
+    return format_settings;
 }
 
 GlutenHiveTextRowInputFormat::GlutenHiveTextRowInputFormat(
@@ -56,7 +77,7 @@ GlutenHiveTextRowInputFormat::GlutenHiveTextRowInputFormat(
     const DB::RowInputFormatParams & params_, 
     const DB::FormatSettings & format_settings_,
     const substrait::NamedStruct & input_schema_)
-    : GlutenHiveTextRowInputFormat(header_, std::make_unique<DB::PeekableReadBuffer>(in_), params_, updateFormatSettings(format_settings_, header_))
+    : GlutenHiveTextRowInputFormat(header_, std::make_unique<DB::PeekableReadBuffer>(in_), params_, format_settings_)
 {
     input_schema = input_schema_;
 }
@@ -64,8 +85,26 @@ GlutenHiveTextRowInputFormat::GlutenHiveTextRowInputFormat(
 GlutenHiveTextRowInputFormat::GlutenHiveTextRowInputFormat(
     const DB::Block & header_, std::shared_ptr<DB::PeekableReadBuffer> buf_, const DB::RowInputFormatParams & params_, const DB::FormatSettings & format_settings_)
     : DB::CSVRowInputFormat(
-        header_, buf_, params_, true, false, format_settings_, std::make_unique<GlutenHiveTextFormatReader>(*buf_, format_settings_))
+        header_, buf_, params_, true, false, format_settings_, std::make_unique<GlutenHiveTextFormatReader>(*buf_, header_, format_settings_))
 {
+    DB::Serializations gluten_serializations ;
+    for (const auto & item : data_types)
+    {
+        const auto & nest_type = item->isNullable() ? *static_cast<const DataTypeNullable &>(*item).getNestedType() : *item;
+        if (item->isNullable())
+        {
+            gluten_serializations.insert(
+                gluten_serializations.end(),
+                std::make_shared<SerializationNullable>(std::make_shared<ExcelSerialization>(nest_type.getDefaultSerialization())));
+        }
+        else
+        {
+            gluten_serializations.insert(
+                gluten_serializations.end(), std::make_shared<ExcelSerialization>(nest_type.getDefaultSerialization()));
+        }
+    }
+
+    serializations = gluten_serializations;
 }
 
 void GlutenHiveTextRowInputFormat::readPrefix()
@@ -91,8 +130,9 @@ void GlutenHiveTextRowInputFormat::readPrefix()
     }
 }
 
-GlutenHiveTextFormatReader::GlutenHiveTextFormatReader(DB::PeekableReadBuffer & buf_, const DB::FormatSettings & format_settings_)
-    :DB::CSVFormatReader(buf_, format_settings_), input_field_names(format_settings_.hive_text.input_field_names)
+GlutenHiveTextFormatReader::GlutenHiveTextFormatReader(
+    DB::PeekableReadBuffer & buf_, const DB::Block & header, const DB::FormatSettings & format_settings_)
+    : DB::CSVFormatReader(buf_, format_settings_), input_field_names(header.getNames())
 {
 }
 

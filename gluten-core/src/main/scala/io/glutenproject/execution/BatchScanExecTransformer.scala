@@ -21,13 +21,13 @@ import java.util.Objects
 import io.glutenproject.GlutenConfig
 import io.glutenproject.backendsapi.BackendsApiManager
 import io.glutenproject.metrics.MetricsUpdater
+import io.glutenproject.sql.shims.spark32.GlutenTextScan
 import io.glutenproject.substrait.SubstraitContext
 import io.glutenproject.substrait.rel.ReadRelNode
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.connector.read.{InputPartition, Scan}
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.execution.datasources.v2.json.JsonScan
 import org.apache.spark.sql.execution.datasources.v2.text.TextScan
 import org.apache.spark.sql.execution.datasources.v2.{BatchScanExecShim, FileScan}
 import org.apache.spark.sql.types.StructType
@@ -112,10 +112,20 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     val transformCtx = super.doTransform(context)
     if (transformCtx.root != null
       && transformCtx.root.isInstanceOf[ReadRelNode]
-      && scan.isInstanceOf[TextScan]) {
+      && scan.isInstanceOf[GlutenTextScan]) {
+      var options: Map[String, String] = Map()
+      properties.foreach {
+        case ("separatorChar", v) => options += ("delimiter" -> v)
+        case ("field.delim", v) => options += ("delimiter" -> v)
+        case ("quoteChar", v) => options += ("quote" -> v)
+        case ("skip.header.line.count", v) => options += ("header" -> v)
+        case ("escapeChar", v) => options += ("escape" -> v)
+        case ("escape.delim", v) => options += ("escape" -> v)
+        case (k, v) => logWarning(s"Ignore text scan properties, key: $k, value:$v")
+      }
       val readRelNode = transformCtx.root.asInstanceOf[ReadRelNode]
       readRelNode.setDataSchema(dataSchema)
-      readRelNode.setProperties(JavaConverters.mapAsJavaMap(properties))
+      readRelNode.setProperties(JavaConverters.mapAsJavaMap(options))
     }
     transformCtx
   }

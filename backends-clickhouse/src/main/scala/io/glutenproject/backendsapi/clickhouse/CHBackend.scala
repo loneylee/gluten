@@ -20,7 +20,7 @@ import io.glutenproject.GlutenConfig
 import io.glutenproject.backendsapi._
 import io.glutenproject.expression.WindowFunctionsBuilder
 import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat
-import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat.{HiveTextReadFormat, JsonReadFormat, MergeTreeReadFormat, OrcReadFormat, ParquetReadFormat}
+import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat._
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, DenseRank, Lag, Lead, NamedExpression, Rank, RowNumber}
@@ -95,6 +95,7 @@ object CHBackendSettings extends BackendSettings with Logging {
       case MergeTreeReadFormat => true
       case HiveTextReadFormat => true
       case JsonReadFormat => true
+      case CSVFileFormat => true
       case _ => false
     }
   }

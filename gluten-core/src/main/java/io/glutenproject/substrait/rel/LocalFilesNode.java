@@ -22,6 +22,8 @@ import io.glutenproject.expression.ConverterUtils;
 import io.substrait.proto.NamedStruct;
 import io.substrait.proto.ReadRel;
 import io.substrait.proto.Type;
+import org.apache.spark.sql.catalyst.csv.CSVOptions;
+import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
@@ -43,6 +45,7 @@ public class LocalFilesNode implements Serializable {
     DwrfReadFormat(),
     MergeTreeReadFormat(),
     HiveTextReadFormat(),
+    CSVFileFormat(),
     JsonReadFormat(),
     UnknownFormat()
   }
@@ -114,9 +117,13 @@ public class LocalFilesNode implements Serializable {
               ReadRel.LocalFiles.FileOrFiles.DwrfReadOptions.newBuilder().build();
           fileBuilder.setDwrf(dwrfReadOptions);
           break;
+        case CSVFileFormat:
         case HiveTextReadFormat:
-          String fieldDelimiter =
-                  fileReadProperties.getOrDefault("field.delim", new String(new char[]{0x01}));
+          String delimiter = fileReadProperties.getOrDefault("delimiter", new String(new char[]{0x01}));
+          String quote = fileReadProperties.getOrDefault("quote", "");
+          String header = fileReadProperties.getOrDefault("header", "0");
+          String escape = fileReadProperties.getOrDefault("escape", "");
+
           NamedStruct.Builder nStructBuilder = NamedStruct.newBuilder();
           if (fileSchema != null) {
             Type.Struct.Builder structBuilder = Type.Struct.newBuilder();
@@ -129,7 +136,10 @@ public class LocalFilesNode implements Serializable {
           }
           ReadRel.LocalFiles.FileOrFiles.HiveTextReadOptions hiveTextReadOptions =
                   ReadRel.LocalFiles.FileOrFiles.HiveTextReadOptions.newBuilder()
-                          .setFieldDelimiter(fieldDelimiter)
+                          .setFieldDelimiter(delimiter)
+                          .setQuote(quote)
+                          .setHeader(Long.parseLong(header))
+                          .setEscape(escape)
                           .setMaxBlockSize(GlutenConfig.getConf().getInputRowMaxBlockSize())
                           .setSchema(nStructBuilder.build())
                           .build();
