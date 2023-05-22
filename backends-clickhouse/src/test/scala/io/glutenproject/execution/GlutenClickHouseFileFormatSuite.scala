@@ -21,7 +21,7 @@ import org.apache.spark.sql.{functions, DataFrame, Row}
 import org.apache.spark.sql.execution.{FileSourceScanExec, LocalTableScanExec}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
-import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.types._
 
 import java.util.Date
 
@@ -60,6 +60,7 @@ class GlutenClickHouseFileFormatSuite
   override protected val queriesResults: String = rootPath + "queries-output"
 
   protected val orcDataPath = rootPath + "orc-data"
+  protected val csvDataPath = rootPath + "csv-data"
 
   override protected def createTPCHNullableTables(): Unit = {}
 
@@ -68,6 +69,9 @@ class GlutenClickHouseFileFormatSuite
   override protected def sparkConf: SparkConf = {
     super.sparkConf
       .set("spark.sql.adaptive.enabled", "true")
+      .set(
+        "spark.gluten.sql.columnar.backend.ch.runtime_settings.date_time_input_format",
+        "best_effort_us")
   }
 
   // in this case, FakeRowAdaptor does R2C
@@ -196,6 +200,133 @@ class GlutenClickHouseFileFormatSuite
         assert(csvFileScan.size == 1)
       }
     )
+  }
+
+  test("test read excel export csv base") {
+    val schema = StructType.apply(
+      Seq(
+        StructField.apply("a", DateType, nullable = true),
+        StructField.apply("b", TimestampType, nullable = true),
+        StructField.apply("c", FloatType, nullable = true),
+        StructField.apply("d", DoubleType, nullable = true),
+        StructField.apply("e", IntegerType, nullable = true),
+        StructField.apply("f", LongType, nullable = true)
+      ))
+
+    val df = spark.read
+      .option("delimiter", ",")
+      .schema(schema)
+      .csv(csvDataPath + "/excel_data_base.csv")
+      .toDF()
+
+    val csvFileScan = collect(df.queryExecution.executedPlan) { case f: FileSourceScanExec => f }
+    assert(csvFileScan.size == 1)
+    assert(df.collect().length == 12)
+  }
+
+  test("test read excel export csv delimiter") {
+    val schema = StructType.apply(
+      Seq(
+        StructField.apply("a", DateType, nullable = true),
+        StructField.apply("b", TimestampType, nullable = true),
+        StructField.apply("c", FloatType, nullable = true),
+        StructField.apply("d", DoubleType, nullable = true),
+        StructField.apply("e", IntegerType, nullable = true),
+        StructField.apply("f", LongType, nullable = true)
+      ))
+
+    val df = spark.read
+      .option("delimiter", "|")
+      .schema(schema)
+      .csv(csvDataPath + "/excel_data_delimiter.csv")
+      .toDF()
+
+    val csvFileScan = collect(df.queryExecution.executedPlan) { case f: FileSourceScanExec => f }
+    assert(csvFileScan.size == 1)
+    assert(df.collect().length == 12)
+  }
+
+  test("test read excel quote") {
+    val schema = StructType.apply(
+      Seq(
+        StructField.apply("a", StringType, nullable = true),
+        StructField.apply("b", StringType, nullable = true)
+      ))
+
+    val df1 = spark.read
+      .option("delimiter", ",")
+      .option("quote", "\"")
+      .schema(schema)
+      .csv(csvDataPath + "/double_quote.csv")
+      .toDF()
+
+    var expectedAnswer: Seq[Row] = null
+    withSQLConf(vanillaSparkConfs(): _*) {
+      expectedAnswer = spark.read
+        .option("delimiter", ",")
+        .option("quote", "\"")
+        .schema(schema)
+        .csv(csvDataPath + "/double_quote.csv")
+        .toDF()
+        .collect()
+    }
+    checkAnswer(df1, expectedAnswer)
+
+    var csvFileScan = collect(df1.queryExecution.executedPlan) { case f: FileSourceScanExec => f }
+    assert(csvFileScan.size == 1)
+
+    val df2 = spark.read
+      .option("delimiter", ",")
+      .option("quote", "\'")
+      .schema(schema)
+      .csv(csvDataPath + "/single_quote.csv")
+      .toDF()
+
+    withSQLConf(vanillaSparkConfs(): _*) {
+      expectedAnswer = spark.read
+        .option("delimiter", ",")
+        .option("quote", "\'")
+        .schema(schema)
+        .csv(csvDataPath + "/single_quote.csv")
+        .toDF()
+        .collect()
+    }
+    checkAnswer(df2, expectedAnswer)
+
+    csvFileScan = collect(df2.queryExecution.executedPlan) { case f: FileSourceScanExec => f }
+    assert(csvFileScan.size == 1)
+  }
+
+  test("test read excel with header") {
+    val schema = StructType.apply(
+      Seq(
+        StructField.apply("a", StringType, nullable = true),
+        StructField.apply("b", StringType, nullable = true)
+      ))
+
+    val df = spark.read
+      .option("delimiter", ";")
+      .option("quote", "")
+      .option("header", "true")
+      .schema(schema)
+      .csv(csvDataPath + "/with_header.csv")
+      .toDF()
+
+    var expectedAnswer: Seq[Row] = null
+    withSQLConf(vanillaSparkConfs(): _*) {
+      expectedAnswer = spark.read
+        .option("delimiter", ";")
+        .option("quote", "")
+        .option("header", "true")
+        .schema(schema)
+        .csv(csvDataPath + "/with_header.csv")
+        .toDF()
+        .collect()
+    }
+    checkAnswer(df, expectedAnswer)
+
+    val csvFileScan = collect(df.queryExecution.executedPlan) { case f: FileSourceScanExec => f }
+    assert(csvFileScan.size == 1)
   }
 
   test("read data from csv file format with table") {

@@ -113,9 +113,19 @@ class BatchScanExecTransformer(output: Seq[AttributeReference], @transient scan:
     if (transformCtx.root != null
       && transformCtx.root.isInstanceOf[ReadRelNode]
       && scan.isInstanceOf[TextScan]) {
+      var options: Map[String, String] = Map()
+      properties.foreach {
+        case ("separatorChar", v) => options += ("delimiter" -> v)
+        case ("field.delim", v) => options += ("delimiter" -> v)
+        case ("quoteChar", v) => options += ("quote" -> v)
+        case ("skip.header.line.count", v) => options += ("header" -> v)
+        case ("escapeChar", v) => options += ("escape" -> v)
+        case ("escape.delim", v) => options += ("escape" -> v)
+        case (k, v) => logWarning(s"Ignore text scan properties, key: $k, value:$v")
+      }
       val readRelNode = transformCtx.root.asInstanceOf[ReadRelNode]
       readRelNode.setDataSchema(dataSchema)
-      readRelNode.setProperties(JavaConverters.mapAsJavaMap(properties))
+      readRelNode.setProperties(JavaConverters.mapAsJavaMap(options))
     }
     transformCtx
   }

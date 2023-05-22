@@ -105,7 +105,9 @@ class GlutenClickHouseHiveTableSuite(var testAppName: String)
     "array_field array<int>," +
     "array_field_with_null array<int>," +
     "map_field map<int, long>," +
-    "map_field_with_null map<int, long>) stored as textfile"
+    "map_field_with_null map<int, long>) stored as textfile " +
+    "WITH SERDEPROPERTIES ('separatorChar' = ','," +
+    "\"quoteChar\" = \"'\", \"escapeChar\" = \"\\\")"
   private val json_table_create_sql = "create table if not exists %s (".format(json_table_name) +
     "string_field string," +
     "int_field int," +
