@@ -553,7 +553,7 @@ case class TransformPreOverrides(isAdaptiveContextOrTopParentExchange: Boolean)
 // This rule will try to convert the row-to-columnar and columnar-to-row
 // into native implementations.
 case class TransformPostOverrides(session: SparkSession, isAdaptiveContext: Boolean)
-    extends Rule[SparkPlan] with Logging {
+    extends Rule[SparkPlan] {
   val columnarConf = GlutenConfig.getConf
   @transient private val planChangeLogger = new PlanChangeLogger[SparkPlan]()
 
