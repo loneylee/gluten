@@ -237,6 +237,7 @@ object GlutenConfig {
   val HADOOP_PREFIX = "spark.hadoop."
 
   // S3 config
+  val S3A_PREFIX = "fs.s3a."
   val S3_ACCESS_KEY = "fs.s3a.access.key"
   val SPARK_S3_ACCESS_KEY: String = HADOOP_PREFIX + S3_ACCESS_KEY
   val S3_SECRET_KEY = "fs.s3a.secret.key"
@@ -363,10 +364,12 @@ object GlutenConfig {
       backendPrefix: String,
       conf: scala.collection.Map[String, String]): util.Map[String, String] = {
     val nativeConfMap = new util.HashMap[String, String]()
+
     val keys = ImmutableList.of(
-      // Velox datasource config
+      // datasource config
       SPARK_SQL_PARQUET_COMPRESSION_CODEC,
-      // Velox datasource config end
+      // datasource config end
+
       GLUTEN_OFFHEAP_SIZE_IN_BYTES_KEY,
       GLUTEN_TASK_OFFHEAP_SIZE_IN_BYTES_KEY,
       GLUTEN_OFFHEAP_ENABLED
@@ -377,6 +380,16 @@ object GlutenConfig {
           nativeConfMap.put(k, conf(k))
         }
       })
+
+    // configs with backend prefix
+    conf
+      .filter(_._1.startsWith(backendPrefix))
+      .foreach(entry => nativeConfMap.put(entry._1, entry._2))
+
+    // put in all S3 configs
+    conf
+      .filter(_._1.startsWith(HADOOP_PREFIX + S3A_PREFIX))
+      .foreach(entry => nativeConfMap.put(entry._1, entry._2))
 
     val keyWithDefault = ImmutableList.of(
       (SPARK_S3_ACCESS_KEY, ""),
@@ -397,10 +410,6 @@ object GlutenConfig {
       ("spark.hadoop.dfs.client.log.severity", "INFO")
     )
     keyWithDefault.forEach(e => nativeConfMap.put(e._1, conf.getOrElse(e._1, e._2)))
-    // velox cache and HiveConnector config
-    conf
-      .filter(_._1.startsWith(backendPrefix))
-      .foreach(entry => nativeConfMap.put(entry._1, entry._2))
 
     // return
     nativeConfMap
