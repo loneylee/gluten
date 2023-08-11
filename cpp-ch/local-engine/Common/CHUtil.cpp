@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/KeAggregateBitmapFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
@@ -607,8 +608,6 @@ void BackendInitializerUtil::initSettings(std::map<std::string, std::string> & b
     settings.set("output_format_json_quote_denormals", true);
     settings.set("function_json_value_return_type_allow_complex", true);
     settings.set("function_json_value_return_type_allow_nullable", true);
-
-
 }
 
 void BackendInitializerUtil::initContexts(DB::Context::ConfigurationPtr config)
@@ -665,6 +664,11 @@ void registerAllFunctions()
     DB::registerAggregateFunctions();
     auto & agg_factory = AggregateFunctionFactory::instance();
     registerAggregateFunctionsBloomFilter(agg_factory);
+
+    {
+        auto & factory = AggregateFunctionFactory::instance();
+        registerKeAggregateFunctionsBitmap(factory);
+    }
 
     {
         /// register aggregate function combinators from local_engine

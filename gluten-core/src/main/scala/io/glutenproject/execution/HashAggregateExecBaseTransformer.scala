@@ -38,6 +38,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.sketch.BloomFilter
 
 import com.google.protobuf.Any
+import org.roaringbitmap.longlong.Roaring64NavigableMap
 
 import java.util
 
@@ -607,6 +608,27 @@ abstract class HashAggregateExecBaseTransformer(
           case Partial =>
             val bloom = aggregateFunc.asInstanceOf[TypedImperativeAggregate[BloomFilter]]
             val aggBufferAttr = bloom.inputAggBufferAttributes
+            for (index <- aggBufferAttr.indices) {
+              val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(index))
+              aggregateAttr += attr
+            }
+            resIndex += aggBufferAttr.size
+          case Final =>
+            aggregateAttr += aggregateAttributeList(resIndex)
+            resIndex += 1
+          case other =>
+            throw new UnsupportedOperationException(s"Unsupported aggregate mode: $other.")
+        }
+      case bitmap
+          if bitmap.getClass.getSimpleName.equals("ReusePreciseCountDistinct") ||
+            bitmap.getClass.getSimpleName.equals("PreciseCountDistinctAndValue") ||
+            bitmap.getClass.getSimpleName.equals("PreciseCountDistinctAndArray") ||
+            bitmap.getClass.getSimpleName.equals("PreciseCountDistinct") =>
+        mode match {
+          case Partial =>
+            val bitmapFunc = aggregateFunc
+              .asInstanceOf[TypedImperativeAggregate[Roaring64NavigableMap]]
+            val aggBufferAttr = bitmapFunc.inputAggBufferAttributes
             for (index <- aggBufferAttr.indices) {
               val attr = ConverterUtils.getAttrFromExpr(aggBufferAttr(index))
               aggregateAttr += attr

@@ -216,7 +216,9 @@ static const std::map<std::string, std::string> SCALAR_FUNCTIONS
        {"unscaled_value", "unscaleValueSpark"},
 
        // runtime filter
-       {"might_contain", "bloomFilterContains"}};
+       {"might_contain", "bloomFilterContains"},
+
+       {"ke_bitmap_cardinality", "keBitmapCardinality"}};
 
 static const std::set<std::string> FUNCTION_NEED_KEEP_ARGUMENTS = {"alias"};
 
@@ -285,7 +287,8 @@ public:
 
     static bool isReadRelFromJava(const substrait::ReadRel & rel);
 
-    void addInputIter(jobject iter, bool materialize_input) {
+    void addInputIter(jobject iter, bool materialize_input)
+    {
         input_iters.emplace_back(iter);
         materialize_inputs.emplace_back(materialize_input);
     }
