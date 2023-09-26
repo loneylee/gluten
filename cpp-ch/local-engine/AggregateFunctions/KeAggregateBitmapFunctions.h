@@ -33,6 +33,8 @@ namespace local_engine
 
 using namespace DB;
 
+static constexpr size_t BITMAP_DATA_BUFF_SIZE = 10485760;
+
 // For handle null values
 template <bool result_is_nullable, bool serialize_flag>
 class SparkAggregateBitmapNullUnary final
@@ -93,7 +95,7 @@ public:
             if (!bitmap_data.empty())
             {
                 auto charBuff = std::make_unique<ReadBufferFromJavaBitmap>(const_cast<char *>(bitmap_data.data), bitmap_data.size);
-                data_lhs.roaring_bitmap.read(*charBuff);
+                data_lhs.roaring_bitmap.read_with_buffer(*charBuff, bitmap_write_buff);
             }
         }
         else
@@ -102,7 +104,7 @@ public:
             {
                 auto data_rhs = std::make_unique<Data>();
                 auto charBuff = std::make_unique<ReadBufferFromJavaBitmap>(const_cast<char *>(bitmap_data.data), bitmap_data.size);
-                data_rhs->roaring_bitmap.read(*charBuff);
+                data_rhs->roaring_bitmap.read_with_buffer(*charBuff, bitmap_write_buff);
                 data_lhs.roaring_bitmap.rb_or(data_rhs->roaring_bitmap);
             }
         }
@@ -127,19 +129,22 @@ public:
 
     void serialize(ConstAggregateDataPtr __restrict place, WriteBuffer & buf, std::optional<size_t> /* version */) const override
     {
-        this->data(place).roaring_bitmap.write(buf);
+        this->data(place).roaring_bitmap.write_with_buffer(buf, bitmap_write_buff);
     }
 
     void deserialize(AggregateDataPtr __restrict place, ReadBuffer & buf, std::optional<size_t> /* version */, Arena *) const override
     {
         this->data(place).init = true;
-        this->data(place).roaring_bitmap.read(buf);
+        this->data(place).roaring_bitmap.read_with_buffer(buf, bitmap_write_buff);
     }
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         assert_cast<ColumnVector<T> &>(to).getData().push_back(static_cast<T>(this->data(place).roaring_bitmap.size()));
     }
+
+private:
+    std::shared_ptr<char[]> bitmap_write_buff = std::shared_ptr<char[]>(new char[BITMAP_DATA_BUFF_SIZE]);
 };
 
 template <typename T, typename Data>

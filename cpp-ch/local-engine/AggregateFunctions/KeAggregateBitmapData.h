@@ -81,6 +81,32 @@ public:
         roaring_bitmap = std::make_shared<RoaringBitmap>(RoaringBitmap::readSafe(buf.get(), size));
     }
 
+    void read_with_buffer(DB::ReadBuffer & in, std::shared_ptr<char[]> bitmap_write_buff)
+    {
+        size_t size;
+        readVarUInt(size, in);
+
+        static constexpr size_t max_size = 100_GiB;
+
+        if (size == 0)
+            throw Exception(ErrorCodes::INCORRECT_DATA, "Incorrect size (0) in groupBitmap.");
+        if (size > max_size)
+            throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Too large array size in groupBitmap (maximum: {})", max_size);
+
+        if (size > 10485760)
+        {
+            /// TODO: this is unnecessary copying - it will be better to read and deserialize in one pass.
+            std::unique_ptr<char[]> buf(new char[size]);
+            in.readStrict(buf.get(), size);
+            roaring_bitmap = std::make_shared<RoaringBitmap>(RoaringBitmap::readSafe(buf.get(), size));
+        }
+        else
+        {
+            in.readStrict(bitmap_write_buff.get(), size);
+            roaring_bitmap = std::make_shared<RoaringBitmap>(RoaringBitmap::readSafe(bitmap_write_buff.get(), size));
+        }
+    }
+
     void write(DB::WriteBuffer & out) const
     {
         auto size = roaring_bitmap->getSizeInBytes();
@@ -88,6 +114,23 @@ public:
         std::unique_ptr<char[]> buf(new char[size]);
         roaring_bitmap->write(buf.get());
         out.write(buf.get(), size);
+    }
+
+    void write_with_buffer(DB::WriteBuffer & out, std::shared_ptr<char[]> bitmap_write_buff) const
+    {
+        auto size = roaring_bitmap->getSizeInBytes();
+        writeVarUInt(size, out);
+        if (size > 10485760)
+        {
+            std::unique_ptr<char[]> buf(new char[size]);
+            roaring_bitmap->write(buf.get());
+            out.write(buf.get(), size);
+        }
+        else
+        {
+            roaring_bitmap->write(bitmap_write_buff.get());
+            out.write(bitmap_write_buff.get(), size);
+        }
     }
 
     void to_ke_bitmap_data(DB::WriteBuffer & ke_bitmap_data_buffer) const
