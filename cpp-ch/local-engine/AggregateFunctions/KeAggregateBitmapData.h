@@ -93,7 +93,7 @@ public:
         if (size > max_size)
             throw Exception(ErrorCodes::TOO_LARGE_ARRAY_SIZE, "Too large array size in groupBitmap (maximum: {})", max_size);
 
-        if (size > 10485760)
+        if (size > 1048576)
         {
             /// TODO: this is unnecessary copying - it will be better to read and deserialize in one pass.
             std::unique_ptr<char[]> buf(new char[size]);
@@ -120,7 +120,7 @@ public:
     {
         auto size = roaring_bitmap->getSizeInBytes();
         writeVarUInt(size, out);
-        if (size > 10485760)
+        if (size > 1048576)
         {
             std::unique_ptr<char[]> buf(new char[size]);
             roaring_bitmap->write(buf.get());

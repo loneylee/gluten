@@ -33,7 +33,7 @@ namespace local_engine
 
 using namespace DB;
 
-static constexpr size_t BITMAP_DATA_BUFF_SIZE = 10485760;
+static constexpr size_t BITMAP_DATA_BUFF_SIZE = 1048576;
 
 // For handle null values
 template <bool result_is_nullable, bool serialize_flag>

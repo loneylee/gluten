@@ -19,6 +19,8 @@ package io.glutenproject.metrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.metric.SQLMetric
 
+import scala.collection.JavaConverters._
+
 class HashAggregateMetricsUpdater(val metrics: Map[String, SQLMetric])
   extends MetricsUpdater
   with Logging {
@@ -57,6 +59,14 @@ class HashAggregateMetricsUpdater(val metrics: Map[String, SQLMetric])
           metrics("inputWaitTime") += (aggMetricsData.inputWaitTime / 1000L).toLong
           metrics("outputWaitTime") += (aggMetricsData.outputWaitTime / 1000L).toLong
           totalTime += aggMetricsData.time
+
+          val resizeStep = aggMetricsData.steps.asScala
+            .flatMap(_.processors.asScala)
+            .find(s => s.getName.equalsIgnoreCase("Resize"))
+          if (!resizeStep.isEmpty) {
+            metrics("resizeInputRows") += resizeStep.get.inputRows
+            metrics("resizeOutputRows") += aggMetricsData.getOutputRows
+          }
 
           MetricsUtil.updateExtraTimeMetric(
             aggMetricsData,
