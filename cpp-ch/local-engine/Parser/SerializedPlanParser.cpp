@@ -1019,14 +1019,25 @@ const ActionsDAG::Node * SerializedPlanParser::parseFunctionWithDAG(
             args = std::move(new_args);
         }
 
-        bool converted_decimal_args = convertBinaryArithmeticFunDecimalArgs(actions_dag, args, scalar_function);
+        convertBinaryArithmeticFunDecimalArgs(actions_dag, args, scalar_function);
         auto function_builder = FunctionFactory::instance().get(ch_func_name, context);
         std::string args_name = join(args, ',');
         result_name = ch_func_name + "(" + args_name + ")";
         const auto * function_node = &actions_dag->addFunction(function_builder, args, result_name);
         result_node = function_node;
 
-        if (!TypeParser::isTypeMatched(rel.scalar_function().output_type(), function_node->result_type) && !converted_decimal_args)
+        bool need_adjust_type = true;
+        if (isDecimalOrNullableDecimal(function_node->result_type))
+        {
+            UInt32 result_p1 = getDecimalPrecision(*DB::removeNullable(function_node->result_type));
+            if(result_p1 > static_cast<UInt32>(rel.scalar_function().output_type().decimal().precision()) &&
+                (func_name == "divide" || func_name == "multiply" || func_name == "plus" || func_name == "minus")) {
+                need_adjust_type = false;
+            }
+
+        }
+
+        if (!TypeParser::isTypeMatched(rel.scalar_function().output_type(), function_node->result_type) && need_adjust_type)
         {
             result_node = ActionsDAGUtil::convertNodeType(
                 actions_dag,
