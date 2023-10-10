@@ -988,39 +988,51 @@ const ActionsDAG::Node * SerializedPlanParser::parseFunctionWithDAG(
         args = std::move(new_args);
     }
 
-    bool converted_decimal_args = convertBinaryArithmeticFunDecimalArgs(actions_dag, args, scalar_function);
-    auto function_builder = FunctionFactory::instance().get(ch_func_name, context);
-    std::string args_name = join(args, ',');
-    result_name = ch_func_name + "(" + args_name + ")";
-    const auto * function_node = &actions_dag->addFunction(function_builder, args, result_name);
-    result_node = function_node;
-    if (!TypeParser::isTypeMatched(rel.scalar_function().output_type(), function_node->result_type) && !converted_decimal_args)
-    {
-        auto result_type = TypeParser::parseType(rel.scalar_function().output_type());
-        if (isDecimalOrNullableDecimal(result_type))
+        convertBinaryArithmeticFunDecimalArgs(actions_dag, args, scalar_function);
+        auto function_builder = FunctionFactory::instance().get(ch_func_name, context);
+        std::string args_name = join(args, ',');
+        result_name = ch_func_name + "(" + args_name + ")";
+        const auto * function_node = &actions_dag->addFunction(function_builder, args, result_name);
+        result_node = function_node;
+
+        bool need_adjust_type = true;
+        if (isDecimalOrNullableDecimal(function_node->result_type))
         {
-            result_node = ActionsDAGUtil::convertNodeType(
-                actions_dag,
-                function_node,
-                // as stated in isTypeMatched， currently we don't change nullability of the result type
-                function_node->result_type->isNullable()
-                ? local_engine::wrapNullableType(true, result_type)->getName()
-                : local_engine::removeNullable(result_type)->getName(),
-                function_node->result_name,
-                CastType::accurateOrNull);
+            UInt32 result_p1 = getDecimalPrecision(*DB::removeNullable(function_node->result_type));
+            if(result_p1 > static_cast<UInt32>(rel.scalar_function().output_type().decimal().precision()) &&
+                (func_name == "divide" || func_name == "multiply" || func_name == "plus" || func_name == "minus")) {
+                need_adjust_type = false;
+            }
+
         }
-        else
+
+        if (!TypeParser::isTypeMatched(rel.scalar_function().output_type(), function_node->result_type) && need_adjust_type)
         {
-            result_node = ActionsDAGUtil::convertNodeType(
-                actions_dag,
-                function_node,
-                // as stated in isTypeMatched， currently we don't change nullability of the result type
-                function_node->result_type->isNullable()
-                ? local_engine::wrapNullableType(true, result_type)->getName()
-                : local_engine::removeNullable(result_type)->getName(),
-                function_node->result_name);
+            auto result_type = TypeParser::parseType(rel.scalar_function().output_type());
+            if (isDecimalOrNullableDecimal(result_type))
+            {
+                result_node = ActionsDAGUtil::convertNodeType(
+                    actions_dag,
+                    function_node,
+                    // as stated in isTypeMatched， currently we don't change nullability of the result type
+                    function_node->result_type->isNullable()
+                    ? local_engine::wrapNullableType(true, result_type)->getName()
+                    : local_engine::removeNullable(result_type)->getName(),
+                    function_node->result_name,
+                    DB::CastType::accurateOrNull);
+            }
+            else
+            {
+                result_node = ActionsDAGUtil::convertNodeType(
+                    actions_dag,
+                    function_node,
+                    // as stated in isTypeMatched， currently we don't change nullability of the result type
+                    function_node->result_type->isNullable()
+                    ? local_engine::wrapNullableType(true, result_type)->getName()
+                    : local_engine::removeNullable(result_type)->getName(),
+                    function_node->result_name);
+            }
         }
-    }
 
     if (ch_func_name == "JSON_VALUE")
         result_node->function->setResolver(function_builder);
