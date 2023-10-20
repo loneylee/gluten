@@ -24,7 +24,6 @@ import org.apache.spark.sql.types._
 
 import java.io.File
 import java.util
-
 case class DataTypesWithNonPrimitiveType(
     string_field: String,
     int_field: java.lang.Integer,
@@ -45,15 +44,7 @@ class GlutenClickHouseDecimalSuite
 
   override protected def createTPCHNotNullTables(): Unit = {}
 
-  override protected def sparkConf: SparkConf = {
-    super.sparkConf
-      .set("spark.shuffle.manager", "sort")
-      .set("spark.io.compression.codec", "snappy")
-      .set("spark.sql.shuffle.partitions", "5")
-      .set("spark.sql.autoBroadcastJoinThreshold", "10MB")
-      .set("spark.gluten.sql.columnar.backend.ch.use.v2", "false")
-      .set("spark.sql.decimalOperations.allowPrecisionLoss", "false")
-  }
+  override protected def sparkConf: SparkConf = super.sparkConf
 
   override def beforeAll(): Unit = {
     super.beforeAll()
