@@ -24,6 +24,7 @@ import org.apache.spark.sql.types._
 
 import java.io.File
 import java.util
+
 case class DataTypesWithNonPrimitiveType(
     string_field: String,
     int_field: java.lang.Integer,
