@@ -16,6 +16,9 @@
  */
 package org.apache.spark.sql
 
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+
 class GlutenJoinSuite extends JoinSuite with GlutenSQLTestsTrait {
 
   override def testNameBlackList: Seq[String] = Seq(
@@ -52,4 +55,100 @@ class GlutenJoinSuite extends JoinSuite with GlutenSQLTestsTrait {
         |""".stripMargin
     checkAnswer(spark.sql(sql), Seq(Row(0, 1), Row(1, 2), Row(2, 3)))
   }
+
+  import testImplicits._
+
+  test("2 full outer join") {
+    withTempView("`left`", "`right`") {
+      upperCaseData.where('N <= 4).createOrReplaceTempView("`left`")
+      upperCaseData.where('N >= 3).createOrReplaceTempView("`right`")
+
+      val left = UnresolvedRelation(TableIdentifier("left"))
+      val right = UnresolvedRelation(TableIdentifier("right"))
+
+//      checkAnswer(
+//        left.join(right, $"left.N" === $"right.N", "full"),
+//        Row(1, "A", null, null) ::
+//          Row(2, "B", null, null) ::
+//          Row(3, "C", 3, "C") ::
+//          Row(4, "D", 4, "D") ::
+//          Row(null, null, 5, "E") ::
+//          Row(null, null, 6, "F") :: Nil)
+
+      checkAnswer(
+        left.join(right, ($"left.N" === $"right.N") && ($"left.N" =!= 3), "full"),
+        Row(1, "A", null, null) ::
+          Row(2, "B", null, null) ::
+          Row(3, "C", null, null) ::
+          Row(null, null, 3, "C") ::
+          Row(4, "D", 4, "D") ::
+          Row(null, null, 5, "E") ::
+          Row(null, null, 6, "F") :: Nil)
+
+//      checkAnswer(
+//        left.join(right, ($"left.N" === $"right.N") && ($"right.N" =!= 3), "full"),
+//        Row(1, "A", null, null) ::
+//          Row(2, "B", null, null) ::
+//          Row(3, "C", null, null) ::
+//          Row(null, null, 3, "C") ::
+//          Row(4, "D", 4, "D") ::
+//          Row(null, null, 5, "E") ::
+//          Row(null, null, 6, "F") :: Nil)
+
+//      // Make sure we are UnknownPartitioning as the outputPartitioning for the outer join
+//      // operator.
+//      checkAnswer(
+//        sql(
+//          """
+//            |SELECT l.a, count(*)
+//            |FROM allNulls l FULL OUTER JOIN upperCaseData r ON (l.a = r.N)
+//            |GROUP BY l.a
+//        """.
+//            stripMargin),
+//        Row(null, 10))
+//
+//      checkAnswer(
+//        sql(
+//          """
+//            |SELECT r.N, count(*)
+//            |FROM allNulls l FULL OUTER JOIN upperCaseData r ON (l.a = r.N)
+//            |GROUP BY r.N
+//          """.stripMargin),
+//        Row
+//        (1, 1) ::
+//          Row(2, 1) ::
+//          Row(3, 1) ::
+//          Row(4, 1) ::
+//          Row(5, 1) ::
+//          Row(6, 1) ::
+//          Row(null, 4) :: Nil)
+//
+      checkAnswer(
+        sql(
+          """
+            |SELECT l.N, count(*)
+            |FROM upperCaseData l FULL OUTER JOIN allNulls r ON (l.N >3 or l.N <2)
+            |GROUP BY l.N
+          """.stripMargin),
+        Row(1
+          , 1) ::
+          Row(2, 1) ::
+          Row(3, 1) ::
+          Row(4, 1) ::
+          Row(5, 1) ::
+          Row(6, 1) ::
+          Row(null, 4) :: Nil)
+//
+//      checkAnswer(
+//        sql(
+//          """
+//            |SELECT r.a, count(*)
+//            |FROM upperCaseData l FULL OUTER JOIN allNulls r ON (l.N = r.a)
+//            |GROUP BY r.a
+//        """.
+//            stripMargin),
+//        Row(null, 10))
+    }
+  }
+
 }

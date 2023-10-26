@@ -171,6 +171,7 @@ abstract class WholeStageTransformerSuite extends GlutenQueryTest with SharedSpa
   protected def runSql(sql: String, noFallBack: Boolean = true)(
       customCheck: DataFrame => Unit): Seq[Row] = {
     val df = spark.sql(sql)
+    print(df.queryExecution.executedPlan)
     val result = df.collect()
     if (!isFallbackCheckDisabled) {
       WholeStageTransformerSuite.checkFallBack(df, noFallBack)

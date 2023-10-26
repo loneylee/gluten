@@ -17,5 +17,23 @@
 package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.GlutenTestsTrait
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.util.DateTimeTestUtils.UTC_OPT
+import org.apache.spark.sql.types.{DecimalType, StructType}
 
-class GlutenJsonExpressionsSuite extends JsonExpressionsSuite with GlutenTestsTrait {}
+class GlutenJsonExpressionsSuite extends JsonExpressionsSuite with GlutenTestsTrait {
+
+  test("2 parse decimals using locale") {
+    def checkDecimalParsing(langTag: String): Unit = {
+      val schema = new StructType().add("d", DecimalType(10, 5))
+      val options = Map("locale" -> langTag)
+      val (expected, input) = decimalInput(langTag)
+
+      checkEvaluation(
+        JsonToStructs(schema, options, Literal.create(input), UTC_OPT),
+        InternalRow(expected))
+    }
+
+    Seq("en-US", "ko-KR", "ru-RU", "de-DE").foreach(checkDecimalParsing)
+  }
+}

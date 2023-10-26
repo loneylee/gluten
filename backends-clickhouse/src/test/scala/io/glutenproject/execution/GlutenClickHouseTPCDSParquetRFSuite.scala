@@ -18,6 +18,8 @@ package io.glutenproject.execution
 
 import org.apache.spark.SparkConf
 
+import jodd.util.ThreadUtil.sleep
+
 class GlutenClickHouseTPCDSParquetRFSuite extends GlutenClickHouseTPCDSAbstractSuite {
 
   override protected val tpcdsQueries: String =
@@ -37,10 +39,25 @@ class GlutenClickHouseTPCDSParquetRFSuite extends GlutenClickHouseTPCDSAbstractS
       .set("spark.gluten.sql.validation.printStackOnFailure", "true")
       // radically small threshold to force runtime bloom filter
       .set("spark.sql.optimizer.runtime.bloomFilter.applicationSideScanSizeThreshold", "1KB")
-      .set("spark.sql.optimizer.runtime.bloomFilter.enabled", "true")
+      .set("spark.sql.optimizer.runtime.bloomFilter.enabled", "false")
+      .set("spark.gluten.enabled", "true")
+      .set(
+        "spark.gluten.sql.columnar.backend.ch.runtime_settings.query_plan_enable_optimizations",
+        "false")
   }
 
   executeTPCDSTest(false)
+
+  test(s"TPCDS q01 xx") {
+    val s = System.currentTimeMillis()
+    var i = 100
+    while (i > 0) {
+      runTPCDSQuery("q1", compareResult = false, skipFallBackAssert = true) { df => }
+      i = i - 1
+    }
+    println(System.currentTimeMillis() - s)
+    sleep(1)
+  }
 }
 
 // scalastyle:on line.size.limit

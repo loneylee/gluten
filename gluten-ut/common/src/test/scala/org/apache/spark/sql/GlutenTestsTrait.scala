@@ -106,6 +106,7 @@ trait GlutenTestsTrait extends GlutenTestsCommonTrait {
         .config("spark.sql.warehouse.dir", warehouse)
         // Avoid the code size overflow error in Spark code generation.
         .config("spark.sql.codegen.wholeStage", "false")
+        .config("spark.gluten.enabled", "true")
 
       _spark = if (BackendTestUtils.isCHBackendLoaded()) {
         sparkBuilder
@@ -252,6 +253,7 @@ trait GlutenTestsTrait extends GlutenTestsCommonTrait {
       _spark.createDataFrame(_spark.sparkContext.parallelize(empData), schema)
     }
     val resultDF = df.select(Column(expression))
+    print(resultDF.queryExecution.executedPlan)
     val result = resultDF.collect()
     TestStats.testUnitNumber = TestStats.testUnitNumber + 1
     if (

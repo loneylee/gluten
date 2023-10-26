@@ -17,10 +17,10 @@
 package org.apache.spark.sql
 
 import io.glutenproject.execution.HashAggregateExecBaseTransformer
-
 import org.apache.spark.sql.execution.aggregate.SortAggregateExec
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.test.SQLTestData.DecimalData
+import org.apache.spark.sql.types.DecimalType
 
 class GlutenDataFrameAggregateSuite extends DataFrameAggregateSuite with GlutenSQLTestsTrait {
 
@@ -300,4 +300,17 @@ class GlutenDataFrameAggregateSuite extends DataFrameAggregateSuite with GlutenS
     )
   }
 
+  test("2 SQL decimal test (used for catching certain decimal handling bugs in aggregates)") {
+    checkAnswer(
+      decimalData.groupBy($"a" cast DecimalType(10, 2)).agg(avg($"b" cast DecimalType(10, 2))),
+      Seq(Row(new java.math.BigDecimal(1), new java.math.BigDecimal("1.5")),
+        Row(new java.math.BigDecimal(2), new java.math.BigDecimal("1.5")),
+        Row(new java.math.BigDecimal(3), new java.math.BigDecimal("1.5"))))
+  }
+
+  test("2 SPARK-36926: decimal average mistakenly overflow") {
+    val df = (1 to 10).map(_ => "9999999999.99").toDF("d")
+    val res = df.select($"d".cast("decimal(12, 2)").as("d")).agg(avg($"d").cast("string"))
+    checkAnswer(res, Row("9999999999.990000"))
+  }
 }

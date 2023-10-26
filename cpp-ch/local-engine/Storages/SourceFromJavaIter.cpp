@@ -98,6 +98,8 @@ void SourceFromJavaIter::convertNullable(DB::Chunk & chunk)
     auto columns = chunk.detachColumns();
     for (size_t i = 0; i < columns.size(); ++i)
     {
+        std::cout << columns.at(i)->getName() << std::endl;
+        std::cout << output.getByPosition(i).name << std::endl;
         DB::WhichDataType which(columns.at(i)->getDataType());
         if (output.getByPosition(i).type->isNullable() && !which.isNullable() && !which.isAggregateFunction())
         {

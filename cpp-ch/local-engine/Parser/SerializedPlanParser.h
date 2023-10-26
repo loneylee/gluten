@@ -361,6 +361,7 @@ private:
     toFunctionNode(ActionsDAGPtr actions_dag, const String & function, const DB::ActionsDAG::NodeRawConstPtrs & args);
     // remove nullable after isNotNull
     void removeNullable(const std::set<String> & require_columns, ActionsDAGPtr actions_dag);
+    const ActionsDAG::Node * addColumn(DB::ActionsDAGPtr actions_dag, const DataTypePtr & type, const Field & field);
     std::string getUniqueName(const std::string & name) { return name + "_" + std::to_string(name_no++); }
     static std::pair<DataTypePtr, Field> parseLiteral(const substrait::Expression_Literal & literal);
     void wrapNullable(

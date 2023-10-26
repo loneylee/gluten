@@ -17,5 +17,29 @@
 package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.GlutenTestsTrait
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{Decimal, LongType}
 
-class GlutenDecimalExpressionSuite extends DecimalExpressionSuite with GlutenTestsTrait {}
+class GlutenDecimalExpressionSuite extends DecimalExpressionSuite with GlutenTestsTrait {
+
+  test("2 MakeDecimal") {
+//    withSQLConf(SQLConf.ANSI_ENABLED.key -> "false") {
+//      checkEvaluation(MakeDecimal(Literal(101L), 3, 1), Decimal("10.1"))
+//      checkEvaluation(MakeDecimal(Literal.create(null, LongType), 3, 1), null)
+//      val overflowExpr = MakeDecimal(Literal.create(1000L, LongType), 3, 1)
+//      checkEvaluation(overflowExpr, null)
+//      checkEvaluationWithMutableProjection(overflowExpr, null)
+//      evaluateWithoutCodegen(overflowExpr, null)
+//      checkEvaluationWithUnsafeProjection(overflowExpr, null)
+//    }
+    withSQLConf(SQLConf.ANSI_ENABLED.key -> "true") {
+      checkEvaluation(MakeDecimal(Literal(101L), 3, 1), Decimal("10.1"))
+      checkEvaluation(MakeDecimal(Literal.create(null, LongType), 3, 1), null)
+      val overflowExpr = MakeDecimal(Literal.create(1000L, LongType), 3, 1)
+      intercept[ArithmeticException](checkEvaluationWithMutableProjection(overflowExpr, null))
+      intercept[ArithmeticException](evaluateWithoutCodegen(overflowExpr, null))
+      intercept[ArithmeticException](checkEvaluationWithUnsafeProjection(overflowExpr, null))
+    }
+  }
+
+}

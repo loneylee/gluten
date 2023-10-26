@@ -26,6 +26,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesDecimal.h>
 #include <Functions/FunctionFactory.h>
 #include <Parser/SerializedPlanParser.h>
 #include <Parser/TypeParser.h>
@@ -222,7 +223,8 @@ void RangeSelectorBuilder::initRangeBlock(Poco::JSON::Array::Ptr range_bounds)
             {
                 const auto & type_name = type_info.inner_type->getName();
                 const auto & field_value = field_info->get("value");
-                if (type_name == "UInt8")
+
+                if (dynamic_cast<const DataTypeUInt8 * >(type_info.inner_type.get()))
                 {
                     col->insert(static_cast<DB::UInt8>(field_value.convert<DB::Int16>()));
                 }
@@ -258,6 +260,21 @@ void RangeSelectorBuilder::initRangeBlock(Poco::JSON::Array::Ptr range_bounds)
                 {
                     int val = field_value.convert<DB::Int32>();
                     col->insert(val);
+                }
+                else if (const auto * decimal32 = dynamic_cast<const DB::DataTypeDecimal<DB::Decimal32> * >(type_info.inner_type.get()))
+                {
+                    DB::Decimal32 value = decimal32->parseFromString(field_value.convert<std::string>());
+                    col->insert(DB::DecimalField<DB::Decimal32>(value, decimal32->getScale()));
+                }
+                else if (const auto * decimal64 = dynamic_cast<const DB::DataTypeDecimal<DB::Decimal64> * >(type_info.inner_type.get()))
+                {
+                    DB::Decimal64 value = decimal64->parseFromString(field_value.convert<std::string>());
+                    col->insert(DB::DecimalField<DB::Decimal64>(value, decimal64->getScale()));
+                }
+                else if (const auto * decimal128 = dynamic_cast<const DB::DataTypeDecimal<DB::Decimal128> * >(type_info.inner_type.get()))
+                {
+                    DB::Decimal128 value = decimal128->parseFromString(field_value.convert<std::string>());
+                    col->insert(DB::DecimalField<DB::Decimal128>(value, decimal128->getScale()));
                 }
                 else
                 {

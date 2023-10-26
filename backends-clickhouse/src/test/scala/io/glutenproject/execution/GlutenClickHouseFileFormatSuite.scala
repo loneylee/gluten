@@ -220,7 +220,7 @@ class GlutenClickHouseFileFormatSuite
   }
 
   test("read normal csv") {
-    val file_path = csvDataPath + "/normal_data.csv"
+    val file_path = csvDataPath + "/test/"
     val schema = StructType.apply(
       Seq(
         StructField.apply("string_field", StringType, nullable = true),

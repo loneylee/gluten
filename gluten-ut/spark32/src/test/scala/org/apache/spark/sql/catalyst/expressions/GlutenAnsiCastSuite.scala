@@ -18,7 +18,7 @@ package org.apache.spark.sql.catalyst.expressions
 
 import org.apache.spark.sql.{GlutenTestConstants, GlutenTestsTrait}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, StringType}
+import org.apache.spark.sql.types.{DataType, Decimal, DecimalType, StringType}
 
 import java.time.LocalDateTime
 
@@ -43,6 +43,52 @@ class GlutenCastSuiteWithAnsiModeOn extends AnsiCastSuiteBase with GlutenTestsTr
 
   override def setConfigurationHint: String =
     s"set ${SQLConf.ANSI_ENABLED.key} as false"
+
+  test("2from decimal") {
+    checkCast(Decimal(0.0), false)
+    checkCast(Decimal(0.5), true)
+    checkCast(Decimal(-5.0), true)
+    checkCast(Decimal(1.5), 1.toByte)
+    checkCast(Decimal(1.5), 1.toShort)
+    checkCast(Decimal(1.5), 1)
+    checkCast(Decimal(1.5), 1.toLong)
+    checkCast(Decimal(1.5), 1.5f)
+    checkCast(Decimal(1.5), 1.5)
+    checkCast(Decimal(1.5), "1.5")
+  }
+
+  test("2 Fast fail for cast string type to decimal type in ansi mode") {
+    checkEvaluation(cast("12345678901234567890123456789012345678", DecimalType(38, 0)),
+      Decimal("12345678901234567890123456789012345678"))
+    checkExceptionInExpression[ArithmeticException](
+      cast("123456789012345678901234567890123456789", DecimalType(38, 0)),
+      "out of decimal type range")
+    checkExceptionInExpression[ArithmeticException](
+      cast("12345678901234567890123456789012345678", DecimalType(38, 1)),
+      "cannot be represented as Decimal(38, 1)")
+
+    checkEvaluation(cast("0.00000000000000000000000000000000000001", DecimalType(38, 0)),
+      Decimal("0"))
+    checkEvaluation(cast("0.00000000000000000000000000000000000000000001", DecimalType(38, 0)),
+      Decimal("0"))
+    checkEvaluation(cast("0.00000000000000000000000000000000000001", DecimalType(38, 18)),
+      Decimal("0E-18"))
+    checkEvaluation(cast("6E-120", DecimalType(38, 0)),
+      Decimal("0"))
+
+    checkEvaluation(cast("6E+37", DecimalType(38, 0)),
+      Decimal("60000000000000000000000000000000000000"))
+    checkExceptionInExpression[ArithmeticException](
+      cast("6E+38", DecimalType(38, 0)),
+      "out of decimal type range")
+    checkExceptionInExpression[ArithmeticException](
+      cast("6E+37", DecimalType(38, 1)),
+      "cannot be represented as Decimal(38, 1)")
+
+    checkExceptionInExpression[NumberFormatException](
+      cast("abcd", DecimalType(38, 1)),
+      "invalid input syntax for type numeric")
+  }
 }
 
 class GlutenAnsiCastSuiteWithAnsiModeOn extends AnsiCastSuiteBase with GlutenTestsTrait {
@@ -108,5 +154,14 @@ class GlutenTryCastSuite extends TryCastSuite with GlutenTestsTrait {
     specialTs.foreach {
       s => checkEvaluation(cast(LocalDateTime.parse(s), StringType), s.replace("T", " "))
     }
+  }
+
+  test("2 ANSI mode: Throw exception on casting out-of-range value to decimal type") {
+    checkExceptionInExpression[ArithmeticException](
+      cast(Literal("134.12"), DecimalType(3, 2)), "cannot be represented")
+    checkExceptionInExpression[ArithmeticException](
+      cast(Literal(BigDecimal(134.12)), DecimalType(3, 2)), "cannot be represented")
+    checkExceptionInExpression[ArithmeticException](
+      cast(Literal(134.12), DecimalType(3, 2)), "cannot be represented")
   }
 }

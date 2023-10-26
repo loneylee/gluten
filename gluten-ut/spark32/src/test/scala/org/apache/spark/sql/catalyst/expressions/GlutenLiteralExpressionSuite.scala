@@ -56,4 +56,25 @@ class GlutenLiteralExpressionSuite extends LiteralExpressionSuite with GlutenTes
     // ExamplePointUDT.sqlType is ArrayType(DoubleType, false).
     // checkEvaluation(Literal.default(new ExamplePointUDT), Array())
   }
+
+  test("2 decimal") {
+    List(-0.0001, 0.0, 0.001, 1.2, 1.1111, 5).foreach { d =>
+      checkEvaluation(Literal(Decimal(d)), Decimal(d))
+//      checkEvaluation(Literal(Decimal(d.toInt)), Decimal(d.toInt))
+//      checkEvaluation(Literal(Decimal(d.toLong)), Decimal(d.toLong))
+//      checkEvaluation(Literal(Decimal((d * 1000L).toLong, 10, 3)),
+//        Decimal((d * 1000L).toLong, 10, 3))
+//      checkEvaluation(Literal(BigDecimal(d.toString)), Decimal(d))
+//      checkEvaluation(Literal(new java.math.BigDecimal(d.toString)), Decimal(d))
+//
+//      checkEvaluation(Literal.create(Decimal(d)), Decimal(d))
+//      checkEvaluation(Literal.create(Decimal(d.toInt)), Decimal(d.toInt))
+//      checkEvaluation(Literal.create(Decimal(d.toLong)), Decimal(d.toLong))
+//      checkEvaluation(Literal.create(Decimal((d * 1000L).toLong, 10, 3)),
+//        Decimal((d * 1000L).toLong, 10, 3))
+//      checkEvaluation(Literal.create(BigDecimal(d.toString)), Decimal(d))
+//      checkEvaluation(Literal.create(new java.math.BigDecimal(d.toString)), Decimal(d))
+
+    }
+  }
 }

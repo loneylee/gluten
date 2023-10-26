@@ -133,7 +133,7 @@ object GlutenQueryTest extends Assertions {
           """.stripMargin
           return Some(errorMessage)
       }
-
+    print(df.queryExecution.executedPlan)
     sameRows(expectedAnswer, sparkAnswer, isSorted).map {
       results =>
         s"""

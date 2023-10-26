@@ -1,21 +1,26 @@
-SELECT
-    l_returnflag,
-    l_linestatus,
-    sum(l_quantity) AS sum_qty,
-    sum(l_extendedprice) AS sum_base_price,
-    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-    avg(l_quantity) AS avg_qty,
-    avg(l_extendedprice) AS avg_price,
-    avg(l_discount) AS avg_disc,
-    count(*) AS count_order
-FROM
-    lineitem
-WHERE
-    l_shipdate <= date'1998-09-02' - interval 1 day
-GROUP BY
-    l_returnflag,
-    l_linestatus
-ORDER BY
-    l_returnflag,
-    l_linestatus;
+
+drop database tpch100_minio;
+create database tpch100_minio;
+use tpch100_minio;
+
+
+
+insert into tpch100.customer select * from customer ;
+
+insert into tpch100.nation select * from nation ;
+insert into tpch100.orders
+select
+    o_orderkey,
+    o_orderdate,
+    o_custkey,
+    o_orderstatus,
+    o_totalprice,
+    o_orderpriority,
+    o_clerk,
+    o_shippriority,
+    o_comment
+from orders ;
+
+insert into tpch100.partsupp select * from partsupp ;
+insert into tpch100.region select * from region ;
+insert into tpch100.supplier select * from supplier ;

@@ -685,6 +685,7 @@ case class TransformPostOverrides(isAdaptiveContext: Boolean) extends Rule[Spark
   def apply(plan: SparkPlan): SparkPlan = {
     val newPlan = replaceWithTransformerPlan(plan)
     planChangeLogger.logRule(ruleName, plan, newPlan)
+    println(newPlan)
     newPlan
   }
 }
