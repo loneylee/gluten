@@ -21,6 +21,7 @@ import io.glutenproject.backendsapi._
 import io.glutenproject.expression.WindowFunctionsBuilder
 import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat
 import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat._
+
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, DenseRank, Lag, Lead, NamedExpression, Rank, RowNumber}
@@ -127,7 +128,6 @@ object CHBackendSettings extends BackendSettingsApi with Logging {
         true
     }
   }
-
 
   override def supportSortExec(): Boolean = {
     GlutenConfig.getConf.enableColumnarSort
