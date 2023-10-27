@@ -20,13 +20,12 @@ import io.glutenproject.GlutenConfig
 import io.glutenproject.backendsapi._
 import io.glutenproject.expression.WindowFunctionsBuilder
 import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat
-import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat.{JsonReadFormat, MergeTreeReadFormat, OrcReadFormat, ParquetReadFormat, TextReadFormat}
-
+import io.glutenproject.substrait.rel.LocalFilesNode.ReadFileFormat._
 import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.expressions.{Alias, DenseRank, Lag, Lead, NamedExpression, Rank, RowNumber}
+import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, DenseRank, Lag, Lead, NamedExpression, Rank, RowNumber}
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
-import org.apache.spark.sql.catalyst.plans.physical.Partitioning
+import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.aggregate.HashAggregateExec
 import org.apache.spark.sql.internal.SQLConf
@@ -114,12 +113,21 @@ object CHBackendSettings extends BackendSettingsApi with Logging {
       child: SparkPlan): Boolean = {
     child match {
       case hash: HashAggregateExec =>
-        // support project when aggregation only has grouping keys, for tpcds q14a,b
-        hash.aggregateExpressions.isEmpty
+        if (hash.aggregateExpressions.isEmpty) {
+          true
+        } else {
+          outputPartitioning match {
+            case hashPartitioning: HashPartitioning =>
+              hashPartitioning.expressions.exists(x => !x.isInstanceOf[AttributeReference])
+            case _ =>
+              false
+          }
+        }
       case _ =>
         true
     }
   }
+
 
   override def supportSortExec(): Boolean = {
     GlutenConfig.getConf.enableColumnarSort
