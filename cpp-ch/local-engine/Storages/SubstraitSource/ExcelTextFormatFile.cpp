@@ -77,7 +77,7 @@ FormatFile::InputFormatPtr ExcelTextFormatFile::createInputFormat(const DB::Bloc
     }
 
     std::shared_ptr<local_engine::ExcelRowInputFormat> txt_input_format = std::make_shared<local_engine::ExcelRowInputFormat>(
-        header, buffer, params, format_settings, column_names, file_info.text().escape());
+        header, buffer, params, format_settings, column_names, "\\");
     res->input = txt_input_format;
     return res;
 }
