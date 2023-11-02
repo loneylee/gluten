@@ -32,7 +32,7 @@
 #include <Storages/HDFS/ReadBufferFromHDFS.h>
 #include <Storages/Serializations/ExcelDecimalSerialization.h>
 #include <Storages/Serializations/ExcelSerialization.h>
-
+#include <Storages/Serializations/ExcelStringReader.h>
 
 namespace DB
 {
@@ -77,7 +77,7 @@ FormatFile::InputFormatPtr ExcelTextFormatFile::createInputFormat(const DB::Bloc
     }
 
     std::shared_ptr<local_engine::ExcelRowInputFormat> txt_input_format = std::make_shared<local_engine::ExcelRowInputFormat>(
-        header, buffer, params, format_settings, column_names, "\\");
+        header, buffer, params, format_settings, column_names, file_info.text().escape());
     res->input = txt_input_format;
     return res;
 }
@@ -137,7 +137,7 @@ ExcelRowInputFormat::ExcelRowInputFormat(
         true,
         false,
         format_settings_,
-        std::make_unique<ExcelTextFormatReader>(*buf_, input_field_names_, format_settings_))
+        std::make_unique<ExcelTextFormatReader>(*buf_, input_field_names_, escape_, format_settings_))
     , escape(escape_)
 {
     DB::Serializations gluten_serializations;
@@ -185,8 +185,8 @@ ExcelRowInputFormat::ExcelRowInputFormat(
 
 
 ExcelTextFormatReader::ExcelTextFormatReader(
-    DB::PeekableReadBuffer & buf_, DB::Names & input_field_names_, const DB::FormatSettings & format_settings_)
-    : CSVFormatReader(buf_, format_settings_), input_field_names(input_field_names_)
+    DB::PeekableReadBuffer & buf_, DB::Names & input_field_names_, String escape_, const DB::FormatSettings & format_settings_)
+    : CSVFormatReader(buf_, format_settings_), input_field_names(input_field_names_), escape(escape_)
 {
 }
 
@@ -282,6 +282,13 @@ bool ExcelTextFormatReader::readField(
     }
 
     return true;
+}
+
+void ExcelTextFormatReader::skipField()
+{
+    skipWhitespacesAndTabs(*buf, format_settings.csv.allow_whitespace_or_tab_as_delimiter);
+    ColumnString::Chars data;
+    readExcelCSVStringInto(data, *buf, format_settings.csv, escape);
 }
 
 void ExcelTextFormatReader::preSkipNullValue()

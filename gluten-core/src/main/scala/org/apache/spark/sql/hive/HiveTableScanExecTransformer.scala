@@ -33,11 +33,13 @@ import org.apache.spark.sql.connector.read.InputPartition
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.hive.HiveTableScanExecTransformer._
+import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.execution.HiveTableScanExec
 import org.apache.spark.sql.types.{ArrayType, MapType, StructType}
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.Utils
 
+import org.apache.hadoop.hive.ql.plan.TableDesc
 import org.apache.hadoop.mapred.TextInputFormat
 
 import java.net.URI
@@ -53,6 +55,13 @@ class HiveTableScanExecTransformer(
 
   @transient override lazy val metrics: Map[String, SQLMetric] =
     BackendsApiManager.getMetricsApiInstance.genHiveTableScanTransformerMetrics(sparkContext)
+
+  @transient private lazy val hiveQlTable = HiveClientImpl.toHiveTable(relation.tableMeta)
+
+  @transient private lazy val tableDesc = new TableDesc(
+    hiveQlTable.getInputFormatClass,
+    hiveQlTable.getOutputFormatClass,
+    hiveQlTable.getMetadata)
 
   override def filterExprs(): Seq[Expression] = Seq.empty
 
@@ -160,6 +169,7 @@ class HiveTableScanExecTransformer(
     var options: Map[String, String] = Map()
     options += ("field_delimiter" -> DEFAULT_FIELD_DELIMITER.toString)
     options += ("nullValue" -> NULL_VALUE.toString)
+    options += ("escape" -> "\\")
     options
   }
 
@@ -169,7 +179,11 @@ class HiveTableScanExecTransformer(
       transformCtx.root != null
       && transformCtx.root.isInstanceOf[ReadRelNode]
     ) {
-      val properties = relation.tableMeta.storage.properties ++ relation.tableMeta.properties
+      var properties: Map[String, String] = Map()
+      tableDesc.getProperties
+        .entrySet()
+        .forEach(e => properties += (e.getKey.toString -> e.getValue.toString))
+
       var options: Map[String, String] = createDefaultTextOption()
       // property key string read from org.apache.hadoop.hive.serde.serdeConstants
       properties.foreach {
