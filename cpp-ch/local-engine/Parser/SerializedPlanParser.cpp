@@ -581,6 +581,13 @@ QueryPlanPtr SerializedPlanParser::parseOp(const substrait::Rel & rel, std::list
                 std::list<const substrait::Rel *> stack;
                 query_plan = mergeTreeParser.parse(std::make_unique<QueryPlan>(), rel, stack);
                 steps = mergeTreeParser.getSteps();
+
+                if (context->getSettingsRef().max_threads > 1)
+                {
+                    auto buffer_step = std::make_unique<BlocksBufferPoolStep>(query_plan->getCurrentDataStream());
+                    steps.emplace_back(buffer_step.get());
+                    query_plan->addStep(std::move(buffer_step));
+                }
             }
             break;
         }
