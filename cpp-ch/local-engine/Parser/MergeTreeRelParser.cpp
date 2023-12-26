@@ -120,7 +120,8 @@ MergeTreeRelParser::parse(DB::QueryPlanPtr query_plan, const substrait::Rel & re
         query_info->prewhere_info = parsePreWhereInfo(rel.filter(), header);
     }
 
-    std::vector<DataPartPtr> selected_parts = storage_factory.getDataParts(table_id, merge_tree_table.parts);
+    std::vector<DataPartPtr> selected_parts = storage_factory.getDataParts(table_id, merge_tree_table.getPartNames());
+    auto ranges = merge_tree_table.extractRange(selected_parts);
     if (selected_parts.empty())
         throw Exception(ErrorCodes::NO_SUCH_DATA_PART, "no data part found.");
     auto read_step = query_context.custom_storage_merge_tree->reader.readFromParts(
@@ -132,7 +133,7 @@ MergeTreeRelParser::parse(DB::QueryPlanPtr query_plan, const substrait::Rel & re
         context,
         context->getSettingsRef().max_block_size,
         1);
-
+    query_context.custom_storage_merge_tree->wrapRangesInDataParts(*reinterpret_cast<ReadFromMergeTree *>(read_step.get()), ranges);
     steps.emplace_back(read_step.get());
     query_plan->addStep(std::move(read_step));
     if (!non_nullable_columns.empty())

@@ -31,6 +31,38 @@ extern const int DUPLICATE_DATA_PART;
 
 namespace local_engine
 {
+
+void CustomStorageMergeTree::wrapRangesInDataParts(DB::ReadFromMergeTree & source, DB::RangesInDataParts ranges)
+{
+    auto result = source.getAnalysisResult();
+    std::unordered_map<String, std::tuple<size_t, size_t>> range_index;
+    for (const auto & part_with_range : ranges)
+    {
+        chassert(part_with_range.ranges.size() == 1);
+        const auto & range = part_with_range.ranges.at(0);
+        range_index.emplace(part_with_range.data_part->name, std::make_tuple(range.begin, range.end));
+    }
+    RangesInDataParts final;
+    for (auto& parts_with_range : result.parts_with_ranges)
+    {
+        if (!range_index.contains(parts_with_range.data_part->name))
+            continue;
+        auto expected_range = range_index.at(parts_with_range.data_part->name);
+        MarkRanges final_ranges;
+        for (const auto & range : parts_with_range.ranges)
+        {
+            const size_t begin = range.begin < std::get<0>(expected_range) ? std::get<0>(expected_range) : range.begin;
+            const size_t end = range.end < std::get<1>(expected_range)? range.begin : std::get<1>(expected_range);
+            MarkRange final_range(begin, end);
+            final_ranges.emplace_back(final_range);
+        }
+        parts_with_range.ranges = final_ranges;
+        final.emplace_back(parts_with_range);
+    }
+    result.parts_with_ranges = final;
+    source.setAnalyzedResult(std::make_shared<MergeTreeDataSelectAnalysisResult>(result));
+}
+
 CustomStorageMergeTree::CustomStorageMergeTree(
     const StorageID & table_id_,
     const String & relative_data_path_,
@@ -64,8 +96,8 @@ DataPartsVector CustomStorageMergeTree::loadDataPartsWithNames(std::unordered_se
     const auto disk = getStoragePolicy()->getDisks().at(0);
     for (const auto& name : parts)
     {
-        part_num ++;
-        MergeTreePartInfo part_info = {"all", part_num, part_num, 0};
+        const auto num = part_num.fetch_add(1);
+        MergeTreePartInfo part_info = {"all", num, num, 0};
         auto res = loadDataPart(part_info, name, disk, MergeTreeDataPartState::Active);
         data_parts.emplace_back(res.part);
     }

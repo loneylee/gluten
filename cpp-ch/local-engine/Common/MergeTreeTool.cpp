@@ -15,10 +15,12 @@
  * limitations under the License.
  */
 #include "MergeTreeTool.h"
+
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include "Storages/MergeTree/IMergeTreeDataPart.h"
 
 using namespace DB;
 
@@ -76,14 +78,45 @@ MergeTreeTable parseMergeTreeTableString(const std::string & info)
     }
     readString(table.relative_path, in);
     assertChar('\n', in);
-    while(!in.eof())
+    while (!in.eof())
     {
-        String part;
-        readString(part, in);
-        table.parts.emplace(part);
+        MergeTreePart part;
+        readString(part.name, in);
         assertChar('\n', in);
+        readVarUInt(part.begin, in);
+        assertChar('\n', in);
+        readVarUInt(part.end, in);
+        assertChar('\n', in);
+        table.parts.emplace_back(part);
     }
     return table;
+}
+
+std::unordered_set<String> MergeTreeTable::getPartNames() const
+{
+    std::unordered_set<String> names;
+    for (const auto & part : parts)
+        names.emplace(part.name);
+    return names;
+}
+
+RangesInDataParts MergeTreeTable::extractRange(DataPartsVector parts_vector) const
+{
+    std::unordered_map<String, DataPartPtr> name_index;
+    std::ranges::for_each(parts_vector, [&](const DataPartPtr & part) {name_index.emplace(part->name, part);});
+    RangesInDataParts ranges_in_data_parts;
+    std::ranges::transform(
+        parts,
+        std::inserter(ranges_in_data_parts, ranges_in_data_parts.end()),
+        [&](const MergeTreePart& part)
+        {
+            RangesInDataPart ranges_in_data_part;
+            ranges_in_data_part.data_part = name_index.at(part.name);
+            ranges_in_data_part.part_index_in_query = 0;
+            ranges_in_data_part.ranges.emplace_back(MarkRange(part.begin, part.end));
+            return ranges_in_data_part;
+        });
+    return ranges_in_data_parts;
 }
 
 std::string MergeTreeTable::toString() const
@@ -105,10 +138,13 @@ std::string MergeTreeTable::toString() const
     writeChar('\n', out);
     for (const auto & part : parts)
     {
-        writeString(part, out);
+        writeString(part.name, out);
+        writeChar('\n', out);
+        writeVarUInt(part.begin, out);
+        writeChar('\n', out);
+        writeVarUInt(part.end, out);
         writeChar('\n', out);
     }
-
     return out.str();
 }
 

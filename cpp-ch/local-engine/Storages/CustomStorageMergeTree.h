@@ -20,6 +20,8 @@
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MutationCommands.h>
+#include <Storages/MergeTree/RangesInDataPart.h>
+#include <Processors/QueryPlan/ReadFromMergeTree.h>
 
 namespace local_engine
 {
@@ -32,6 +34,7 @@ class CustomStorageMergeTree final : public MergeTreeData
     friend class CustomMergeTreeSink;
 
 public:
+    static void wrapRangesInDataParts(DB::ReadFromMergeTree & source, DB::RangesInDataParts ranges);
     CustomStorageMergeTree(
         const StorageID & table_id_,
         const String & relative_data_path_,
