@@ -48,15 +48,13 @@ void CustomStorageMergeTree::wrapRangesInDataParts(DB::ReadFromMergeTree & sourc
         if (!range_index.contains(parts_with_range.data_part->name))
             continue;
         auto expected_range = range_index.at(parts_with_range.data_part->name);
-        MarkRanges final_ranges;
         for (const auto & range : parts_with_range.ranges)
         {
-            const size_t begin = range.begin < std::get<0>(expected_range) ? std::get<0>(expected_range) : range.begin;
-            const size_t end = range.end < std::get<1>(expected_range)? range.begin : std::get<1>(expected_range);
+            const size_t begin = std::max(range.begin, std::get<0>(expected_range));
+            const size_t end = std::min(range.end, std::get<1>(expected_range));
             MarkRange final_range(begin, end);
-            final_ranges.emplace_back(final_range);
+            parts_with_range.ranges.emplace_back(final_range);
         }
-        parts_with_range.ranges = final_ranges;
         final.emplace_back(parts_with_range);
     }
     result.parts_with_ranges = final;
