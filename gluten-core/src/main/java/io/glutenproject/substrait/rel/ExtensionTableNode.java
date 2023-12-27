@@ -39,6 +39,8 @@ public class ExtensionTableNode implements SplitInfo {
   private String primaryKey;
 
   private List<String> partList;
+  private List<Long> starts;
+  private List<Long> lengths;
 
   ExtensionTableNode(
       Long minPartsNum,
@@ -49,6 +51,8 @@ public class ExtensionTableNode implements SplitInfo {
       String orderByKey,
       String primaryKey,
       List<String> partList,
+      List<Long> starts,
+      List<Long> lengths,
       List<String> preferredLocations) {
     this.minPartsNum = minPartsNum;
     this.maxPartsNum = maxPartsNum;
@@ -58,14 +62,17 @@ public class ExtensionTableNode implements SplitInfo {
     this.orderByKey = orderByKey;
     this.primaryKey = primaryKey;
     this.partList = partList;
+    this.starts = starts;
+    this.lengths = lengths;
     this.preferredLocations.addAll(preferredLocations);
     if (!this.partList.isEmpty()) {
       // New: MergeTree;{database}\n{table}\n{orderByKey}\n{primaryKey}\n{relative_path}\n
       // {part_path1}\n{part_path2}\n...
 
       StringBuffer partPathList = new StringBuffer();
-      for (String p : this.partList) {
-        partPathList.append(p).append("\n");
+      for (int i = 0; i < this.partList.size(); i++) {
+        partPathList.append(this.partList.get(i)).append("\n")
+                .append(this.starts.get(i)).append("\n").append(this.lengths.get(i)).append("\n");
       }
 
       extensionTableStr
@@ -82,7 +89,7 @@ public class ExtensionTableNode implements SplitInfo {
         extensionTableStr.append(this.primaryKey).append("\n");
       }
       extensionTableStr.append(relativePath).append("\n").append(partPathList);
-
+    System.out.println(extensionTableStr);
     } else {
       // Old: MergeTree;{database}\n{table}\n{relative_path}\n{min_part}\n{max_part}\n
       extensionTableStr

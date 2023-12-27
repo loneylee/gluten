@@ -51,6 +51,7 @@
 #include <Common/ExceptionUtils.h>
 #include <Common/JNIUtils.h>
 #include <Common/QueryContext.h>
+#include <Parser/MergeTreeRelParser.h>
 
 #ifdef __cplusplus
 
@@ -506,6 +507,28 @@ JNIEXPORT jstring Java_io_glutenproject_vectorized_CHColumnVector_nativeGetStrin
 }
 
 // native block
+JNIEXPORT jlong Java_io_glutenproject_vectorized_CHNativeBlock_getPartMark(
+    JNIEnv * env,
+    jclass,
+    jstring database_,
+    jstring table_,
+    jstring part_,
+    jstring relative_path_,
+    jstring column1_name_,
+    jstring column1_type_)
+{
+    LOCAL_ENGINE_JNI_METHOD_START
+    auto database = jstring2string(env, database_);
+    auto table = jstring2string(env, table_);
+    auto part = jstring2string(env, part_);
+    auto relative_path = jstring2string(env, relative_path_);
+    auto column1_name = jstring2string(env, column1_name_);
+    auto column1_type = jstring2string(env, column1_type_);
+
+    return local_engine::MergeTreeRelParser::get_part_mark(database, table, part, relative_path, column1_name, column1_type);
+    LOCAL_ENGINE_JNI_METHOD_END(env, -1)
+}
+
 JNIEXPORT void Java_io_glutenproject_vectorized_CHNativeBlock_nativeClose(JNIEnv * /*env*/, jobject /*obj*/, jlong /*block_address*/)
 {
 }

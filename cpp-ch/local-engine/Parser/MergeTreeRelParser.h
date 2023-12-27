@@ -45,6 +45,8 @@ public:
 
     ~MergeTreeRelParser() override = default;
 
+    static Int64 get_part_mark(String database, String table,String part, String relative_path, String column1_name, String column1_type);
+
     DB::QueryPlanPtr
     parse(DB::QueryPlanPtr query_plan, const substrait::Rel & rel, std::list<const substrait::Rel *> & rel_stack_) override;
 

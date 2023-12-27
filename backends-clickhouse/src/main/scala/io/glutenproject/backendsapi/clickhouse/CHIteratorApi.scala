@@ -58,6 +58,9 @@ class CHIteratorApi extends IteratorApi with Logging with LogLevelUtil {
       fileFormat: ReadFileFormat): SplitInfo = {
     partition match {
       case p: GlutenMergeTreePartition =>
+        val partLists = new JArrayList[String]()
+        val starts = new JArrayList[JLong]()
+        val lengths = new JArrayList[JLong]()
         ExtensionTableBuilder
           .makeExtensionTable(
             p.minParts,
@@ -67,9 +70,23 @@ class CHIteratorApi extends IteratorApi with Logging with LogLevelUtil {
             p.tablePath,
             "",
             "",
-            new JArrayList[String](),
+            partLists,
+            starts,
+            lengths,
             CHAffinity.getNativeMergeTreePartitionLocations(p).toList.asJava)
       case p: NewGlutenMergeTreePartition =>
+        val partLists = new JArrayList[String]()
+        val starts = new JArrayList[JLong]()
+        val lengths = new JArrayList[JLong]()
+        p.partList
+          .foreach(
+            parts => {
+              partLists.add(parts.name)
+              starts.add(parts.start)
+              lengths.add(parts.length)
+            }
+          )
+
         ExtensionTableBuilder
           .makeExtensionTable(
             -1L,
@@ -79,7 +96,9 @@ class CHIteratorApi extends IteratorApi with Logging with LogLevelUtil {
             p.tablePath,
             p.orderByKey,
             p.primaryKey,
-            p.partList.toList.asJava,
+            partLists,
+            starts,
+            lengths,
             CHAffinity.getNewNativeMergeTreePartitionLocations(p).toList.asJava
           )
       case f: FilePartition =>

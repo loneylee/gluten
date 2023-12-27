@@ -16,6 +16,7 @@
  */
 package org.apache.spark.sql.execution.datasources.v2.clickhouse.utils
 
+import io.glutenproject.vectorized.CHNativeBlock
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.delta.DeltaOperations
@@ -116,9 +117,21 @@ object ScanMergeTreePartsUtils extends Logging {
       fs.delete(versionFileName, false)
     }
     val finalActions = allDirSummary.map(
-      dir => {
-        val (filePath, name) =
+      f = dir => {
+        val (filePath, name) = {
           (clickHouseTableV2.deltaLog.dataPath.toString + "/" + dir._1, dir._1)
+        }
+        val db = clickHouseTableV2.catalogTable.get.identifier.database.get
+        val table = clickHouseTableV2.catalogTable.get.identifier.table
+        val mark = CHNativeBlock.getPartMark(
+          db,
+          table,
+          allDirSummary.apply(0)._1,
+          clickHouseTableV2.deltaLog.dataPath.toString.substring("file:/".length - 1),
+          clickHouseTableV2.schema().fields.apply(0).name,
+          clickHouseTableV2.schema().fields.apply(0).dataType.toString
+        )
+        println(s"$db.$table ${allDirSummary.apply(0)._1} has mark $mark")
         AddFileTags.partsInfoToAddFile(
           clickHouseTableV2.catalogTable.get.identifier.database.get,
           clickHouseTableV2.catalogTable.get.identifier.table,
@@ -140,7 +153,8 @@ object ScanMergeTreePartsUtils extends Logging {
           dir._8,
           dir._1,
           dataChange = true,
-          partitionValues = dir._9
+          partitionValues = dir._9,
+          marks = mark.toInt
         )
       })
     if (finalActions.nonEmpty) {

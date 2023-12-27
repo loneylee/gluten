@@ -30,6 +30,8 @@ public class ExtensionTableBuilder {
       String orderByKey,
       String primaryKey,
       List<String> partList,
+      List<Long> starts,
+      List<Long> lengths,
       List<String> preferredLocations) {
     return new ExtensionTableNode(
         minPartsNum,
@@ -40,6 +42,8 @@ public class ExtensionTableBuilder {
         orderByKey,
         primaryKey,
         partList,
+        starts,
+        lengths,
         preferredLocations);
   }
 }

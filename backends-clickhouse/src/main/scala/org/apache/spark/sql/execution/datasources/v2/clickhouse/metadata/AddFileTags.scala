@@ -101,7 +101,8 @@ object AddFileTags {
       partition: String = "",
       defaultCompressionCodec: String = "LZ4",
       stats: String = "",
-      partitionValues: Map[String, String] = Map.empty[String, String]): AddFile = {
+      partitionValues: Map[String, String] = Map.empty[String, String],
+      marks: Int): AddFile = {
     // scalastyle:on argcount
     val tags = Map[String, String](
       "database" -> database,
@@ -123,7 +124,8 @@ object AddFileTags {
       "dataVersion" -> dataVersion.toString,
       "defaultCompressionCodec" -> defaultCompressionCodec,
       "bucketNum" -> bucketNum,
-      "dirName" -> dirName
+      "dirName" -> dirName,
+      "mark" -> marks.toString
     )
     AddFile(name, partitionValues, bytesOnDisk, modificationTime, dataChange, stats, tags)
   }
@@ -154,7 +156,8 @@ object AddFileTags {
       addFile.tags.get("partition").get,
       addFile.tags.get("defaultCompressionCodec").get,
       addFile.stats,
-      addFile.partitionValues
+      addFile.partitionValues,
+      marks = addFile.tags.get("mark").get.toInt
     )
   }
 }

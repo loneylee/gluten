@@ -17,6 +17,7 @@
 package io.glutenproject.execution
 
 import io.glutenproject.substrait.plan.PlanBuilder
+import org.apache.spark.sql.execution.datasources.utils.MergeTreePartitionedFile
 
 case class GlutenMergeTreePartition(
     index: Int,
@@ -41,7 +42,7 @@ case class NewGlutenMergeTreePartition(
     tablePath: String,
     orderByKey: String,
     primaryKey: String,
-    partList: Array[String],
+    partList: Array[MergeTreePartitionedFile],
     plan: Array[Byte] = PlanBuilder.EMPTY_PLAN)
   extends BaseGlutenPartition {
   override def preferredLocations(): Array[String] = {

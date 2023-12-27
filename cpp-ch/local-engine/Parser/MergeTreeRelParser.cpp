@@ -43,6 +43,43 @@ namespace local_engine
 {
 using namespace DB;
 
+// TODO deleta after deltalog write
+Int64 MergeTreeRelParser::get_part_mark(String database, String table,String part, String relative_path, String column1_name, String column1_type)
+{
+    std::unordered_set<String> parts;
+    parts.emplace(part);
+
+    DB::ColumnsWithTypeAndName internal_cols;
+    internal_cols.reserve(1);
+    auto ch_type = TypeParser::getCHTypeByName(column1_type);
+    internal_cols.push_back(ColumnWithTypeAndName(ch_type, column1_name));
+    DB::Block res(std::move(internal_cols));
+
+    auto metadata = buildMetaData(res.getNamesAndTypesList(), SerializedPlanParser::global_context);
+
+    auto storage_factory = StorageMergeTreeFactory::instance();
+    StorageID table_id(database, table);
+    auto storage = storage_factory.getStorage(
+        table_id,
+        metadata->getColumns(),
+        [&]() -> CustomStorageMergeTreePtr
+        {
+            auto custom_storage_merge_tree = std::make_shared<CustomStorageMergeTree>(
+                StorageID(database, table),
+                relative_path,
+                *metadata,
+                false,
+                SerializedPlanParser::global_context,
+                "",
+                MergeTreeData::MergingParams(),
+                buildMergeTreeSettings());
+            return custom_storage_merge_tree;
+        });
+
+    std::vector<DataPartPtr> selected_parts = storage_factory.getDataParts(table_id, parts);
+    return selected_parts[0]->index_granularity.getMarksCount();
+}
+
 /// Find minimal position of any of the column in primary key.
 static Int64 findMinPosition(const NameSet & condition_table_columns, const NameToIndexMap & primary_key_positions)
 {
