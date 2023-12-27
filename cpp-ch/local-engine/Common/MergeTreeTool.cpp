@@ -83,9 +83,9 @@ MergeTreeTable parseMergeTreeTableString(const std::string & info)
         MergeTreePart part;
         readString(part.name, in);
         assertChar('\n', in);
-        readVarUInt(part.begin, in);
+        readIntText(part.begin, in);
         assertChar('\n', in);
-        readVarUInt(part.end, in);
+        readIntText(part.end, in);
         assertChar('\n', in);
         table.parts.emplace_back(part);
     }
