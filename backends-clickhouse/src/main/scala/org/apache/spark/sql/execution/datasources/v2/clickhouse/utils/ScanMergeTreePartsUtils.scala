@@ -126,12 +126,12 @@ object ScanMergeTreePartsUtils extends Logging {
         val mark = CHNativeBlock.getPartMark(
           db,
           table,
-          allDirSummary.apply(0)._1,
+          dir._1,
           clickHouseTableV2.deltaLog.dataPath.toString.substring("file:/".length - 1),
           clickHouseTableV2.schema().fields.apply(0).name,
           clickHouseTableV2.schema().fields.apply(0).dataType.toString
         )
-        println(s"$db.$table ${allDirSummary.apply(0)._1} has mark $mark")
+        println(s"$db.$table ${dir._1} has mark $mark")
         AddFileTags.partsInfoToAddFile(
           clickHouseTableV2.catalogTable.get.identifier.database.get,
           clickHouseTableV2.catalogTable.get.identifier.table,
