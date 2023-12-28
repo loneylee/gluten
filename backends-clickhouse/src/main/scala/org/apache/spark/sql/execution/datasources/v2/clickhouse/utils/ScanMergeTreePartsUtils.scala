@@ -17,6 +17,7 @@
 package org.apache.spark.sql.execution.datasources.v2.clickhouse.utils
 
 import io.glutenproject.vectorized.CHNativeBlock
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.delta.DeltaOperations
@@ -116,47 +117,46 @@ object ScanMergeTreePartsUtils extends Logging {
     if (fs.exists(versionFileName)) {
       fs.delete(versionFileName, false)
     }
-    val finalActions = allDirSummary.map(
-      f = dir => {
-        val (filePath, name) = {
-          (clickHouseTableV2.deltaLog.dataPath.toString + "/" + dir._1, dir._1)
-        }
-        val db = clickHouseTableV2.catalogTable.get.identifier.database.get
-        val table = clickHouseTableV2.catalogTable.get.identifier.table
-        val mark = CHNativeBlock.getPartMark(
-          db,
-          table,
-          dir._1,
-          clickHouseTableV2.deltaLog.dataPath.toString.substring("file:/".length - 1),
-          clickHouseTableV2.schema().fields.apply(0).name,
-          clickHouseTableV2.schema().fields.apply(0).dataType.toString
-        )
-        println(s"$db.$table ${dir._1} has mark $mark")
-        AddFileTags.partsInfoToAddFile(
-          clickHouseTableV2.catalogTable.get.identifier.database.get,
-          clickHouseTableV2.catalogTable.get.identifier.table,
-          clickHouseTableV2.snapshot.metadata.configuration("engine"),
-          filePath,
-          "",
-          name,
-          "",
-          0L,
-          dir._6,
-          dir._6,
-          dir._6,
-          dir._7,
-          dir._2,
-          dir._3,
-          dir._4,
-          dir._5,
-          dir._3,
-          dir._8,
-          dir._1,
-          dataChange = true,
-          partitionValues = dir._9,
-          marks = mark.toInt
-        )
-      })
+    val finalActions = allDirSummary.map(f = dir => {
+      val (filePath, name) = {
+        (clickHouseTableV2.deltaLog.dataPath.toString + "/" + dir._1, dir._1)
+      }
+      val db = clickHouseTableV2.catalogTable.get.identifier.database.get
+      val table = clickHouseTableV2.catalogTable.get.identifier.table
+      val mark = CHNativeBlock.getPartMark(
+        db,
+        table,
+        dir._1,
+        clickHouseTableV2.deltaLog.dataPath.toString.substring("file:/".length - 1),
+        clickHouseTableV2.schema().fields.apply(0).name,
+        clickHouseTableV2.schema().fields.apply(0).dataType.toString
+      )
+      logInfo(s"$db.$table ${dir._1} has mark $mark")
+      AddFileTags.partsInfoToAddFile(
+        clickHouseTableV2.catalogTable.get.identifier.database.get,
+        clickHouseTableV2.catalogTable.get.identifier.table,
+        clickHouseTableV2.snapshot.metadata.configuration("engine"),
+        filePath,
+        "",
+        name,
+        "",
+        0L,
+        dir._6,
+        dir._6,
+        dir._6,
+        dir._7,
+        dir._2,
+        dir._3,
+        dir._4,
+        dir._5,
+        dir._3,
+        dir._8,
+        dir._1,
+        dataChange = true,
+        partitionValues = dir._9,
+        marks = mark.toInt
+      )
+    })
     if (finalActions.nonEmpty) {
       // write transaction log
       logInfo(s"starting to generate commit info, finalActions.length=${finalActions.length} .")

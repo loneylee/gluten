@@ -71,8 +71,13 @@ public class ExtensionTableNode implements SplitInfo {
 
       StringBuffer partPathList = new StringBuffer();
       for (int i = 0; i < this.partList.size(); i++) {
-        partPathList.append(this.partList.get(i)).append("\n")
-                .append(this.starts.get(i)).append("\n").append(this.starts.get(i) + this.lengths.get(i)).append("\n");
+        partPathList
+            .append(this.partList.get(i))
+            .append("\n")
+            .append(this.starts.get(i))
+            .append("\n")
+            .append(this.starts.get(i) + this.lengths.get(i))
+            .append("\n");
       }
 
       extensionTableStr

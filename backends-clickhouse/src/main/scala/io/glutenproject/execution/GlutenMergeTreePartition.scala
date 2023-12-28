@@ -17,6 +17,7 @@
 package io.glutenproject.execution
 
 import io.glutenproject.substrait.plan.PlanBuilder
+
 import org.apache.spark.sql.execution.datasources.utils.MergeTreePartitionedFile
 
 case class GlutenMergeTreePartition(
@@ -36,7 +37,6 @@ case class GlutenMergeTreePartition(
 
 case class NewGlutenMergeTreePartition(
     index: Int,
-    engine: String,
     database: String,
     table: String,
     tablePath: String,

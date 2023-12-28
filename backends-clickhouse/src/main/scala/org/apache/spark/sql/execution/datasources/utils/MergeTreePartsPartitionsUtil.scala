@@ -163,7 +163,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
     if (table.bucketOption.isDefined) {
       if (bucketedScan) {
         genBucketedInputPartitionSeq(
-          engine,
           database,
           tableName,
           tablePath,
@@ -173,12 +172,10 @@ object MergeTreePartsPartitionsUtil extends Logging {
           optionalBucketSet,
           optionalNumCoalescedBuckets,
           orderByKeyOption,
-          primaryKeyOption,
-          sparkSession
+          primaryKeyOption
         )
       } else {
         genInputPartitionSeqWithBucketTable(
-          engine,
           database,
           tableName,
           tablePath,
@@ -192,7 +189,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
       }
     } else {
       genInputPartitionSeq(
-        engine,
         database,
         tableName,
         tablePath,
@@ -209,7 +205,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
 
   /** Generate bucket partition */
   def genBucketedInputPartitionSeq(
-      engine: String,
       database: String,
       tableName: String,
       tablePath: String,
@@ -219,8 +214,7 @@ object MergeTreePartsPartitionsUtil extends Logging {
       optionalBucketSet: Option[BitSet],
       optionalNumCoalescedBuckets: Option[Int],
       orderByKeyOption: Option[Seq[String]],
-      primaryKeyOption: Option[Seq[String]],
-      sparkSession: SparkSession): Unit = {
+      primaryKeyOption: Option[Seq[String]]): Unit = {
     val bucketGroupParts = partsFiles.groupBy(p => Integer.parseInt(p.bucketNum))
 
     val prunedFilesGroupedToBuckets = if (optionalBucketSet.isDefined) {
@@ -267,7 +261,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
             .toArray
           val newPartition = NewGlutenMergeTreePartition(
             partitions.size,
-            engine,
             database,
             currTableName,
             currTablePath,
@@ -282,7 +275,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
 
   /** Generate partition from the bucket table */
   def genInputPartitionSeqWithBucketTable(
-      engine: String,
       database: String,
       tableName: String,
       tablePath: String,
@@ -294,7 +286,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
       primaryKeyOption: Option[Seq[String]],
       sparkSession: SparkSession): Unit = {
     val bucketGroupParts = partsFiles.groupBy(p => Integer.parseInt(p.bucketNum))
-
     val prunedFilesGroupedToBuckets = if (optionalBucketSet.isDefined) {
       val bucketSet = optionalBucketSet.get
       bucketGroupParts.filter(f => bucketSet.get(f._1))
@@ -330,8 +321,7 @@ object MergeTreePartsPartitionsUtil extends Logging {
                       offset,
                       size,
                       size * part.bytesOnDisk / part.marks)
-                }
-            )
+                })
             .toArray)
     }
 
@@ -354,7 +344,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
       if (currentFiles.nonEmpty) {
         val newPartition = NewGlutenMergeTreePartition(
           partitions.size,
-          engine,
           database,
           currTableName,
           currTablePath,
@@ -469,7 +458,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
   }
 
   def genInputPartitionSeq(
-      engine: String,
       database: String,
       tableName: String,
       tablePath: String,
@@ -525,7 +513,6 @@ object MergeTreePartsPartitionsUtil extends Logging {
       if (currentFiles.nonEmpty) {
         val newPartition = NewGlutenMergeTreePartition(
           partitions.size,
-          engine,
           database,
           tableName,
           tablePath,

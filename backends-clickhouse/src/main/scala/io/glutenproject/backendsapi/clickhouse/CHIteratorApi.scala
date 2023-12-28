@@ -84,8 +84,7 @@ class CHIteratorApi extends IteratorApi with Logging with LogLevelUtil {
               partLists.add(parts.name)
               starts.add(parts.start)
               lengths.add(parts.length)
-            }
-          )
+            })
 
         ExtensionTableBuilder
           .makeExtensionTable(

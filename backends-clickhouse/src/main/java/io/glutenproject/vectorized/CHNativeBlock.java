@@ -24,12 +24,13 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 public class CHNativeBlock {
 
-  public static native long getPartMark(String database,
-                                          String table,
-                                          String part,
-                                          String relative_path,
-                                          String column1_name,
-                                          String column1_type);
+  public static native long getPartMark(
+      String database,
+      String table,
+      String part,
+      String relative_path,
+      String column1_name,
+      String column1_type);
 
   private long blockAddress;
 
