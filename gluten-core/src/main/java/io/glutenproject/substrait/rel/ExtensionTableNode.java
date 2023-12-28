@@ -72,7 +72,7 @@ public class ExtensionTableNode implements SplitInfo {
       StringBuffer partPathList = new StringBuffer();
       for (int i = 0; i < this.partList.size(); i++) {
         partPathList.append(this.partList.get(i)).append("\n")
-                .append(this.starts.get(i)).append("\n").append(this.lengths.get(i)).append("\n");
+                .append(this.starts.get(i)).append("\n").append(this.starts.get(i) + this.lengths.get(i)).append("\n");
       }
 
       extensionTableStr
@@ -89,7 +89,6 @@ public class ExtensionTableNode implements SplitInfo {
         extensionTableStr.append(this.primaryKey).append("\n");
       }
       extensionTableStr.append(relativePath).append("\n").append(partPathList);
-    System.out.println(extensionTableStr);
     } else {
       // Old: MergeTree;{database}\n{table}\n{relative_path}\n{min_part}\n{max_part}\n
       extensionTableStr

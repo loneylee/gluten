@@ -186,6 +186,8 @@ object MergeTreePartsPartitionsUtil extends Logging {
           partsFiles,
           partitions,
           optionalBucketSet,
+          orderByKeyOption,
+          primaryKeyOption,
           sparkSession)
       }
     } else {
@@ -241,7 +243,7 @@ object MergeTreePartsPartitionsUtil extends Logging {
     val primaryKey =
       if (
         !orderByKey.equals("tuple()") && primaryKeyOption.isDefined &&
-          primaryKeyOption.get.nonEmpty
+        primaryKeyOption.get.nonEmpty
       ) {
         primaryKeyOption.get.mkString(",")
       } else ""
@@ -252,15 +254,17 @@ object MergeTreePartsPartitionsUtil extends Logging {
         if (!currBucketParts.isEmpty) {
           var currTableName = tableName + "_" + currBucketParts(0).bucketNum
           var currTablePath = tablePath + "/" + currBucketParts(0).bucketNum
-          val partList = currBucketParts.map(
-            part => {
-              MergeTreePartitionedFile(
-                part.name.split("/").apply(1),
-                part.path,
-                0,
-                part.marks,
-                part.bytesOnDisk)
-            }).toArray
+          val partList = currBucketParts
+            .map(
+              part => {
+                MergeTreePartitionedFile(
+                  part.name.split("/").apply(1),
+                  part.path,
+                  0,
+                  part.marks,
+                  part.bytesOnDisk)
+              })
+            .toArray
           val newPartition = NewGlutenMergeTreePartition(
             partitions.size,
             engine,
@@ -286,6 +290,8 @@ object MergeTreePartsPartitionsUtil extends Logging {
       partsFiles: Seq[AddMergeTreeParts],
       partitions: ArrayBuffer[InputPartition],
       optionalBucketSet: Option[BitSet],
+      orderByKeyOption: Option[Seq[String]],
+      primaryKeyOption: Option[Seq[String]],
       sparkSession: SparkSession): Unit = {
     val bucketGroupParts = partsFiles.groupBy(p => Integer.parseInt(p.bucketNum))
 
@@ -296,57 +302,89 @@ object MergeTreePartsPartitionsUtil extends Logging {
       bucketGroupParts
     }
 
-    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
-    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+    val selectPartsFiles = prunedFilesGroupedToBuckets.flatMap(g => g._2).toSeq
+    if (selectPartsFiles.isEmpty) {
+      return
+    }
 
-    def closePartition(
-        currTableName: String,
-        currTablePath: String,
-        currentMinPartsNum: Long,
-        currentMaxPartsNum: Long): Unit = {
-      if (currentMaxPartsNum >= currentMinPartsNum) {
-        val newPartition = GlutenMergeTreePartition(
+    val maxSplitBytes = getMaxSplitBytes(sparkSession, selectPartsFiles)
+    val total_marks = selectPartsFiles.map(p => p.marks).sum
+    val total_Bytes = selectPartsFiles.map(p => p.bytesOnDisk).sum
+    val markCntPerPartition = maxSplitBytes * total_marks / total_Bytes + 1
+
+    val splitGroupedToBucketsFiles = prunedFilesGroupedToBuckets.map {
+      f =>
+        (
+          f._2.head.bucketNum,
+          f._2
+            .flatMap(
+              part =>
+                (0L until part.marks by markCntPerPartition).map {
+                  offset =>
+                    val remaining = part.marks - offset
+                    val size =
+                      if (remaining > markCntPerPartition) markCntPerPartition else remaining
+                    MergeTreePartitionedFile(
+                      part.name.split("/").apply(1),
+                      part.path,
+                      offset,
+                      size,
+                      size * part.bytesOnDisk / part.marks)
+                }
+            )
+            .toArray)
+    }
+
+    val orderByKey =
+      if (orderByKeyOption.isDefined && orderByKeyOption.get.nonEmpty) {
+        orderByKeyOption.get.mkString(",")
+      } else "tuple()"
+
+    val primaryKey =
+      if (
+        !orderByKey.equals("tuple()") && primaryKeyOption.isDefined &&
+        primaryKeyOption.get.nonEmpty
+      ) {
+        primaryKeyOption.get.mkString(",")
+      } else ""
+
+    val currentFiles = new ArrayBuffer[MergeTreePartitionedFile]
+    var currentSize = 0L
+    def closePartition(currTableName: String, currTablePath: String): Unit = {
+      if (currentFiles.nonEmpty) {
+        val newPartition = NewGlutenMergeTreePartition(
           partitions.size,
           engine,
           database,
           currTableName,
           currTablePath,
-          currentMinPartsNum,
-          currentMaxPartsNum + 1)
+          orderByKey,
+          primaryKey,
+          currentFiles.toArray
+        )
         partitions += newPartition
       }
+      currentFiles.clear()
+      currentSize = 0
     }
 
-    Seq.tabulate(bucketSpec.numBuckets) {
-      bucketId =>
-        val currBucketParts = prunedFilesGroupedToBuckets.getOrElse(bucketId, Seq.empty)
-        if (!currBucketParts.isEmpty) {
-          var currentMinPartsNum = Long.MaxValue
-          var currentMaxPartsNum = -1L
-          var currentSize = 0L
-          var currTableName = tableName + "_" + currBucketParts(0).bucketNum
-          var currTablePath = tablePath + "/" + currBucketParts(0).bucketNum
+    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
+    splitGroupedToBucketsFiles.foreach(
+      group => {
+        val currTableName = tableName + "_" + group._1
+        val currTablePath = tablePath + "/" + group._1
+        group._2.foreach(
+          part => {
+            if (currentSize + part.bytesOnDisk > maxSplitBytes) {
+              closePartition(currTableName, currTablePath)
+            }
+            // Add the given file to the current partition.
+            currentSize += part.bytesOnDisk + openCostInBytes
+            currentFiles += part
+          })
 
-          currBucketParts.foreach {
-            parts =>
-              if (currentSize + parts.bytesOnDisk > maxSplitBytes) {
-                closePartition(currTableName, currTablePath, currentMinPartsNum, currentMaxPartsNum)
-                currentMinPartsNum = Long.MaxValue
-                currentMaxPartsNum = -1L
-                currentSize = 0L
-              }
-              // Add the given file to the current partition.
-              currentSize += parts.bytesOnDisk + openCostInBytes
-              if (currentMinPartsNum >= parts.minBlockNumber) {
-                currentMinPartsNum = parts.minBlockNumber
-              }
-              if (currentMaxPartsNum <= parts.maxBlockNumber) {
-                currentMaxPartsNum = parts.maxBlockNumber
-              }
-          }
-          closePartition(currTableName, currTablePath, currentMinPartsNum, currentMaxPartsNum)
-        }
-    }
+        closePartition(currTableName, currTablePath)
+      })
   }
 
   /** Generate partition from the non-bucket table */
@@ -441,40 +479,13 @@ object MergeTreePartsPartitionsUtil extends Logging {
       orderByKeyOption: Option[Seq[String]],
       primaryKeyOption: Option[Seq[String]],
       sparkSession: SparkSession): Unit = {
-    val selectedPartitionMap = selectedPartitions
-      .flatMap(
-        p => {
-          p.files.map(
-            f => {
-              (f.getPath.toString, f)
-            })
-        })
-      .toMap
 
+    val selectedPartitionMap =
+      selectedPartitions.flatMap(p => p.files.map(f => (f.getPath.toString, f))).toMap
     val selectPartsFiles = partsFiles.filter(part => selectedPartitionMap.contains(part.path))
-
-    val total_marks = selectPartsFiles.map(p => p.marks).sum
-    val totalCores = SparkResourceUtil.getTotalCores(sparkSession.sessionState.conf)
-    val markCntPerPartition = math.ceil((total_marks * 1.0) / totalCores).toInt
-    logInfo(s"Planning scan with bin packing, max mark: $markCntPerPartition")
-    val splitFiles = selectPartsFiles.flatMap {
-      part =>
-        (0L until part.marks by markCntPerPartition).map {
-          offset =>
-            val remaining = part.marks - offset
-            val size = if (remaining > markCntPerPartition) markCntPerPartition else remaining
-            val end = if (offset + size == part.marks) part.marks else offset + size - 1
-            MergeTreePartitionedFile(
-              part.name,
-              part.path,
-              offset,
-              end,
-              (size * 1.0 / part.marks * part.bytesOnDisk).toLong)
-        }
+    if (selectPartsFiles.isEmpty) {
+      return
     }
-
-    var currentSize = 0L
-    val currentFiles = new ArrayBuffer[MergeTreePartitionedFile]
 
     val orderByKey =
       if (orderByKeyOption.isDefined && orderByKeyOption.get.nonEmpty) {
@@ -489,7 +500,27 @@ object MergeTreePartsPartitionsUtil extends Logging {
         primaryKeyOption.get.mkString(",")
       } else ""
 
-    /** Close the current partition and move to the next. */
+    val maxSplitBytes = getMaxSplitBytes(sparkSession, selectPartsFiles)
+    val total_marks = selectPartsFiles.map(p => p.marks).sum
+    val total_Bytes = selectPartsFiles.map(p => p.bytesOnDisk).sum
+    val markCntPerPartition = maxSplitBytes * total_marks / total_Bytes + 1
+    val splitFiles = selectPartsFiles.flatMap {
+      part =>
+        (0L until part.marks by markCntPerPartition).map {
+          offset =>
+            val remaining = part.marks - offset
+            val size = if (remaining > markCntPerPartition) markCntPerPartition else remaining
+            MergeTreePartitionedFile(
+              part.name,
+              part.path,
+              offset,
+              size,
+              size * part.bytesOnDisk / part.marks)
+        }
+    }
+
+    var currentSize = 0L
+    val currentFiles = new ArrayBuffer[MergeTreePartitionedFile]
     def closePartition(): Unit = {
       if (currentFiles.nonEmpty) {
         val newPartition = NewGlutenMergeTreePartition(
@@ -508,22 +539,27 @@ object MergeTreePartsPartitionsUtil extends Logging {
       currentSize = 0
     }
 
-    // generate `Seq[InputPartition]` by file size
-//    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
-//    val maxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
-//    logInfo(
-//      s"Planning scan with bin packing, max size: $maxSplitBytes bytes, " +
-//        s"open cost is considered as scanning $openCostInBytes bytes.")
-    // Assign files to partitions using "Next Fit Decreasing"
+    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
     splitFiles.foreach {
       parts =>
-        if (currentSize + parts.length > markCntPerPartition) {
+        if (currentSize + parts.bytesOnDisk > maxSplitBytes) {
           closePartition()
         }
         // Add the given file to the current partition.
-        currentSize += parts.length
+        currentSize += parts.bytesOnDisk + openCostInBytes
         currentFiles += parts
     }
     closePartition()
+  }
+
+  def getMaxSplitBytes(sparkSession: SparkSession, selectedParts: Seq[AddMergeTreeParts]): Long = {
+    val defaultMaxSplitBytes = sparkSession.sessionState.conf.filesMaxPartitionBytes
+    val openCostInBytes = sparkSession.sessionState.conf.filesOpenCostInBytes
+    val minPartitionNum = sparkSession.sessionState.conf.filesMinPartitionNum
+      .getOrElse(sparkSession.leafNodeDefaultParallelism)
+    val totalBytes = selectedParts.map(_.bytesOnDisk + openCostInBytes).sum
+    val bytesPerCore = totalBytes / minPartitionNum
+
+    Math.min(defaultMaxSplitBytes, Math.max(openCostInBytes, bytesPerCore))
   }
 }
