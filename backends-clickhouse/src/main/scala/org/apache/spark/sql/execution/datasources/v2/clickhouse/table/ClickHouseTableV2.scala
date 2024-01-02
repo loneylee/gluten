@@ -20,7 +20,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, Encoder, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.TableCapability._
 import org.apache.spark.sql.connector.expressions._
@@ -33,9 +33,10 @@ import org.apache.spark.sql.delta.schema.SchemaUtils
 import org.apache.spark.sql.delta.sources.{DeltaDataSource, DeltaSQLConf}
 import org.apache.spark.sql.execution.datasources.{FileFormat, HadoopFsRelation}
 import org.apache.spark.sql.execution.datasources.v1.ClickHouseFileIndex
+import org.apache.spark.sql.execution.datasources.v1.clickhouse.source.ClickHouseWriteBuilder
 import org.apache.spark.sql.execution.datasources.v2.clickhouse.{ClickHouseConfig, ClickHouseLog, DeltaLogAdapter}
 import org.apache.spark.sql.execution.datasources.v2.clickhouse.metadata.{AddFileTags, AddMergeTreeParts}
-import org.apache.spark.sql.execution.datasources.v2.clickhouse.source.{ClickHouseScanBuilder, ClickHouseWriteBuilder, DeltaMergeTreeFileFormat}
+import org.apache.spark.sql.execution.datasources.v2.clickhouse.source.{ClickHouseScanBuilder, DeltaMergeTreeFileFormat}
 import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -152,7 +153,8 @@ case class ClickHouseTableV2(
       BATCH_WRITE,
       V1_BATCH_WRITE,
       OVERWRITE_BY_FILTER,
-      TRUNCATE).asJava
+      TRUNCATE,
+      OVERWRITE_DYNAMIC).asJava
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
     new ClickHouseWriteBuilder(spark, this, deltaLog, info)
@@ -162,18 +164,87 @@ case class ClickHouseTableV2(
     new ClickHouseScanBuilder(spark, this, tableSchema, options)
   }
 
+  lazy val dataBaseName = catalogTable
+    .map(_.identifier.database.getOrElse("default"))
+    .getOrElse("default")
+
+  lazy val tableName = catalogTable
+    .map(_.identifier.table)
+    .getOrElse("")
+
   lazy val bucketOption: Option[BucketSpec] = {
     val tableProperties = properties()
     if (tableProperties.containsKey("numBuckets")) {
-      val numBuckets = tableProperties.get("numBuckets").toInt
+      val numBuckets = tableProperties.get("numBuckets").trim.toInt
       val bucketColumnNames: Seq[String] =
-        tableProperties.get("bucketColumnNames").split(",").toSeq
-      val sortColumnNames: Seq[String] =
-        tableProperties.get("sortColumnNames").split(",").toSeq
+        tableProperties.get("bucketColumnNames").split(",").map(_.trim).toSeq
+      val sortColumnNames: Seq[String] = if (tableProperties.containsKey("sortColumnNames")) {
+        tableProperties.get("sortColumnNames").split(",").map(_.trim).toSeq
+      } else Seq.empty[String]
       Some(BucketSpec(numBuckets, bucketColumnNames, sortColumnNames))
     } else {
       None
     }
+  }
+
+  lazy val orderByKeyOption: Option[Seq[String]] = {
+    if (bucketOption.isDefined && bucketOption.get.sortColumnNames.nonEmpty) {
+      val orderByKes = bucketOption.get.sortColumnNames
+      val invalidKeys = orderByKes.intersect(partitionColumns)
+      if (invalidKeys.nonEmpty) {
+        throw new IllegalStateException(
+          s"partition cols $invalidKeys can not be in the order by keys.")
+      }
+      Some(orderByKes)
+    } else {
+      val tableProperties = properties()
+      if (tableProperties.containsKey("orderByKey")) {
+        if (tableProperties.get("orderByKey").nonEmpty) {
+          val orderByKes = tableProperties.get("orderByKey").split(",").map(_.trim).toSeq
+          val invalidKeys = orderByKes.intersect(partitionColumns)
+          if (invalidKeys.nonEmpty) {
+            throw new IllegalStateException(
+              s"partition cols $invalidKeys can not be in the order by keys.")
+          }
+          Some(orderByKes)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+  }
+
+  lazy val primaryKeyOption: Option[Seq[String]] = {
+    if (orderByKeyOption.isDefined) {
+      val tableProperties = properties()
+      if (tableProperties.containsKey("primaryKey")) {
+        if (tableProperties.get("primaryKey").nonEmpty) {
+          val primaryKeys = tableProperties.get("primaryKey").split(",").map(_.trim).toSeq
+          if (!orderByKeyOption.get.mkString(",").startsWith(primaryKeys.mkString(","))) {
+            throw new IllegalStateException(
+              s"Primary key $primaryKeys must be a prefix of the sorting key")
+          }
+          Some(primaryKeys)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+  }
+
+  lazy val partitionColumns = snapshot.metadata.partitionColumns
+
+  lazy val clickhouseTableConfigs: Map[String, String] = {
+    val tableProperties = properties()
+    val configs = scala.collection.mutable.Map[String, String]()
+    configs += ("storage_policy" -> tableProperties.getOrDefault("storage_policy", "default"))
+    configs.toMap
   }
 
   /** Return V1Table. */
@@ -285,7 +356,16 @@ case class ClickHouseTableV2(
   }
 
   override def fileFormat(metadata: Metadata): FileFormat = {
-    new DeltaMergeTreeFileFormat(metadata)
+    new DeltaMergeTreeFileFormat(
+      metadata,
+      dataBaseName,
+      tableName,
+      Seq.empty[Attribute],
+      orderByKeyOption,
+      primaryKeyOption,
+      clickhouseTableConfigs,
+      partitionColumns,
+      bucketOption)
   }
 }
 
@@ -297,11 +377,15 @@ object ClickHouseTableV2 extends Logging {
         getTableParts(tablePath)
       }
     }
-  private val fileStatusCache = CacheBuilder.newBuilder
+
+  protected val fileStatusCache = CacheBuilder.newBuilder
     .maximumSize(1000)
     .expireAfterAccess(3600L, TimeUnit.SECONDS)
     .recordStats
     .build[Path, Seq[AddMergeTreeParts]](fileStatusCacheLoader)
+
+  def clearAllFileStatusCache: Unit = fileStatusCache.invalidateAll()
+
   protected val stalenessLimit: Long = SparkSession.active.sessionState.conf
     .getConf(DeltaSQLConf.DELTA_ASYNC_UPDATE_STALENESS_TIME_LIMIT)
   protected var lastUpdateTimestamp: Long = -1L
@@ -320,15 +404,18 @@ object ClickHouseTableV2 extends Logging {
       .as[AddFile]
       .collect()
       .map(AddFileTags.partsMapToParts)
-      .sortWith(
+      /* .sortWith(
         (a, b) => {
           if (a.bucketNum.nonEmpty) {
-            (Integer.parseInt(a.bucketNum) < Integer.parseInt(b.bucketNum)) ||
-            (a.minBlockNumber < b.minBlockNumber)
+            if (Integer.parseInt(a.bucketNum) == Integer.parseInt(b.bucketNum)) {
+              a.minBlockNumber < b.minBlockNumber
+            } else {
+              Integer.parseInt(a.bucketNum) < Integer.parseInt(b.bucketNum)
+            }
           } else {
             a.minBlockNumber < b.minBlockNumber
           }
-        })
+        }) */
       .toSeq
     logInfo(
       s"Get ${allParts.size} parts from path ${tablePath.toString} " +

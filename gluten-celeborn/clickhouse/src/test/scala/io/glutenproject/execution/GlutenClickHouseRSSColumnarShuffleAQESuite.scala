@@ -29,7 +29,10 @@ class GlutenClickHouseRSSColumnarShuffleAQESuite
 
   override protected val tablesPath: String = basePath + "/tpch-data-ch"
   override protected val tpchQueries: String = rootPath + "queries/tpch-queries-ch"
-  override protected val queriesResults: String = rootPath + "queries-output"
+  override protected val queriesResults: String = rootPath + "mergetree-queries-output"
+
+  override protected val parquetTableDataPath: String =
+    "../../../../../gluten-core/src/test/resources/tpch-data"
 
   /** Run Gluten + ClickHouse Backend with ColumnarShuffleManager */
   override protected def sparkConf: SparkConf = {
@@ -40,7 +43,6 @@ class GlutenClickHouseRSSColumnarShuffleAQESuite
       .set("spark.io.compression.codec", "LZ4")
       .set("spark.sql.shuffle.partitions", "5")
       .set("spark.sql.autoBroadcastJoinThreshold", "10MB")
-      .set("spark.gluten.sql.columnar.backend.ch.use.v2", "false")
       .set("spark.sql.adaptive.enabled", "true")
       .set("spark.shuffle.service.enabled", "false")
       .set("spark.celeborn.client.spark.shuffle.writer", "hash")
