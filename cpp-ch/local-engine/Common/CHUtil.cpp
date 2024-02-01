@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <AggregateFunctions/Combinators/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/KeAggregateBitmapFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnConst.h>
@@ -717,6 +718,11 @@ void registerAllFunctions()
     DB::registerAggregateFunctions();
     auto & agg_factory = AggregateFunctionFactory::instance();
     registerAggregateFunctionsBloomFilter(agg_factory);
+
+    {
+        auto & factory = AggregateFunctionFactory::instance();
+        registerKeAggregateFunctionsBitmap(factory);
+    }
 
     {
         /// register aggregate function combinators from local_engine
