@@ -235,7 +235,7 @@
       </properties>
     </profile>
     <profile>
-      <id>celeborn</id>
+      <id>rss</id>
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>
@@ -244,7 +244,7 @@
       </modules>
     </profile>
     <profile>
-      <id>uniffle</id>
+      <id>rss-uniffle</id>
       <activation>
         <activeByDefault>false</activeByDefault>
       </activation>

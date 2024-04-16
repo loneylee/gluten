@@ -19,20 +19,20 @@
 
 #include "shuffle/Payload.h"
 #include "shuffle/Utils.h"
-#include "shuffle/rss/RssPartitionWriter.h"
+#include "shuffle/rss/CelebornPartitionWriter.h"
 #include "utils/Timer.h"
 
 namespace gluten {
 
-void RssPartitionWriter::init() {
+void CelebornPartitionWriter::init() {
   bytesEvicted_.resize(numPartitions_, 0);
   rawPartitionLengths_.resize(numPartitions_, 0);
 }
 
-arrow::Status RssPartitionWriter::stop(ShuffleWriterMetrics* metrics) {
+arrow::Status CelebornPartitionWriter::stop(ShuffleWriterMetrics* metrics) {
   // Push data and collect metrics.
   auto totalBytesEvicted = std::accumulate(bytesEvicted_.begin(), bytesEvicted_.end(), 0LL);
-  rssClient_->stop();
+  celebornClient_->stop();
   // Populate metrics.
   metrics->totalCompressTime += compressTime_;
   metrics->totalEvictTime += spillTime_;
@@ -44,12 +44,12 @@ arrow::Status RssPartitionWriter::stop(ShuffleWriterMetrics* metrics) {
   return arrow::Status::OK();
 }
 
-arrow::Status RssPartitionWriter::reclaimFixedSize(int64_t size, int64_t* actual) {
+arrow::Status CelebornPartitionWriter::reclaimFixedSize(int64_t size, int64_t* actual) {
   *actual = 0;
   return arrow::Status::OK();
 }
 
-arrow::Status RssPartitionWriter::evict(
+arrow::Status CelebornPartitionWriter::evict(
     uint32_t partitionId,
     std::unique_ptr<InMemoryPayload> inMemoryPayload,
     Evict::type evictType,
@@ -64,13 +64,14 @@ arrow::Status RssPartitionWriter::evict(
   ARROW_ASSIGN_OR_RAISE(
       auto payload, inMemoryPayload->toBlockPayload(payloadType, payloadPool_.get(), codec_ ? codec_.get() : nullptr));
   // Copy payload to arrow buffered os.
-  ARROW_ASSIGN_OR_RAISE(auto rssBufferOs, arrow::io::BufferOutputStream::Create(options_.pushBufferMaxSize, pool_));
-  RETURN_NOT_OK(payload->serialize(rssBufferOs.get()));
+  ARROW_ASSIGN_OR_RAISE(
+      auto celebornBufferOs, arrow::io::BufferOutputStream::Create(options_.pushBufferMaxSize, pool_));
+  RETURN_NOT_OK(payload->serialize(celebornBufferOs.get()));
   payload = nullptr; // Invalidate payload immediately.
 
   // Push.
-  ARROW_ASSIGN_OR_RAISE(auto buffer, rssBufferOs->Finish());
-  bytesEvicted_[partitionId] += rssClient_->pushPartitionData(
+  ARROW_ASSIGN_OR_RAISE(auto buffer, celebornBufferOs->Finish());
+  bytesEvicted_[partitionId] += celebornClient_->pushPartitionData(
       partitionId, reinterpret_cast<char*>(const_cast<uint8_t*>(buffer->data())), buffer->size());
   return arrow::Status::OK();
 }

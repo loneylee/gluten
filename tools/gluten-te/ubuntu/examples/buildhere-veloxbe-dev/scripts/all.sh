@@ -19,8 +19,7 @@ set -ex
 # Build Gluten
 EXTRA_MAVEN_OPTIONS="-Pspark-3.2 \
                      -Pbackends-velox \
-                     -Pceleborn \
-                     -Puniffle \
+                     -Prss \
                      -DskipTests \
                      -Dscalastyle.skip=true \
                      -Dcheckstyle.skip=true"
