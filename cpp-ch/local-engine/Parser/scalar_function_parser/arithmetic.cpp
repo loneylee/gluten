@@ -34,50 +34,58 @@ namespace local_engine
 
 class DecimalType
 {
+public:
     static constexpr Int32 spark_max_precision = 38;
     static constexpr Int32 spark_max_scale = 38;
     static constexpr Int32 minimum_adjusted_scale = 6;
 
-    static constexpr Int32 chickhouse_max_precision = DB::DataTypeDecimal256::maxPrecision();
-    static constexpr Int32 chickhouse_max_scale = DB::DataTypeDecimal128::maxPrecision();
+    static constexpr Int32 clickhouse_max_precision = DB::DataTypeDecimal256::maxPrecision();
+    static constexpr Int32 clickhouse_max_scale = DB::DataTypeDecimal128::maxPrecision();
 
-public:
     Int32 precision;
     Int32 scale;
 
-private:
-    static DecimalType bounded_to_click_house(const Int32 precision, const Int32 scale)
+    enum MODE
     {
-        return DecimalType(std::min(precision, chickhouse_max_precision), std::min(scale, chickhouse_max_scale));
+        NORMAL,
+        QUICK
+    };
+
+private:
+    static DecimalType bounded_to_clickhouse(const Int32 precision, const Int32 scale, const MODE mode)
+    {
+        const Int32 max_precision = (mode == NORMAL) ? clickhouse_max_precision : spark_max_precision;
+        const Int32 max_scale = (mode == NORMAL) ? clickhouse_max_scale : spark_max_scale;
+        return DecimalType(std::min(precision, max_precision), std::min(scale, max_scale));
     }
 
 public:
-    static DecimalType evalAddSubstractDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2)
+    static DecimalType evalAddSubtractDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const MODE mode)
     {
         const Int32 scale = s1;
         const Int32 precision = scale + std::max(p1 - s1, p2 - s2) + 1;
-        return bounded_to_click_house(precision, scale);
+        return bounded_to_clickhouse(precision, scale, mode);
     }
 
-    static DecimalType evalDividetDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2)
+    static DecimalType evalDivideDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const MODE mode)
     {
         const Int32 scale = std::max(minimum_adjusted_scale, s1 + p2 + 1);
         const Int32 precision = p1 - s1 + s2 + scale;
-        return bounded_to_click_house(precision, scale);
+        return bounded_to_clickhouse(precision, scale, mode);
     }
 
-    static DecimalType evalModuloDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2)
+    static DecimalType evalModuloDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const MODE mode)
     {
         const Int32 scale = std::max(s1, s2);
         const Int32 precision = std::min(p1 - s1, p2 - s2) + scale;
-        return bounded_to_click_house(precision, scale);
+        return bounded_to_clickhouse(precision, scale, mode);
     }
 
-    static DecimalType evalMultiplyDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2)
+    static DecimalType evalMultiplyDecimalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 /*s2*/, const MODE mode)
     {
         const Int32 scale = s1;
         const Int32 precision = p1 + p2 + 1;
-        return bounded_to_click_house(precision, scale);
+        return bounded_to_clickhouse(precision, scale, mode);
     }
 };
 
@@ -113,17 +121,17 @@ protected:
         return new_args;
     }
 
-    DecimalType getDecimalType(const DataTypePtr & left, const DataTypePtr & right) const
+    DecimalType getDecimalType(const DataTypePtr & left, const DataTypePtr & right, const DecimalType::MODE mode) const
     {
         assert(isDecimal(left) && isDecimal(right));
         const Int32 p1 = getDecimalPrecision(*left);
         const Int32 s1 = getDecimalScale(*left);
         const Int32 p2 = getDecimalPrecision(*right);
         const Int32 s2 = getDecimalScale(*right);
-        return internalEvalType(p1, s1, p2, s2);
+        return internalEvalType(p1, s1, p2, s2, mode);
     }
 
-    virtual DecimalType internalEvalType(Int32 p1, Int32 s1, Int32 p2, Int32 s2) const = 0;
+    virtual DecimalType internalEvalType(Int32 p1, Int32 s1, Int32 p2, Int32 s2, const DecimalType::MODE mode) const = 0;
 
     const ActionsDAG::Node *
     checkDecimalOverflow(ActionsDAG & actions_dag, const ActionsDAG::Node * func_node, Int32 precision, Int32 scale) const
@@ -155,10 +163,19 @@ public:
         const auto left_type = DB::removeNullable(parsed_args[0]->result_type);
         const auto right_type = DB::removeNullable(parsed_args[1]->result_type);
         const bool converted = isDecimal(left_type) && isDecimal(right_type);
+        DataTypePtr parsed_output_type [[maybe_unused]];
 
         if (converted)
         {
-            const DecimalType evalType = getDecimalType(left_type, right_type);
+            parsed_output_type = removeNullable(TypeParser::parseType(substrait_func.output_type()));
+            chassert(isDecimal(parsed_output_type));
+
+            const auto & settings = plan_parser->getContext()->getSettingsRef();
+            DecimalType::MODE mode = DecimalType::NORMAL;
+            if (settings.has("arithmetic.decimal.mode") && Poco::toUpper(settings.getString("arithmetic.decimal.mode")) == "'QUICK'")
+                mode = DecimalType::QUICK;
+
+            const DecimalType evalType = getDecimalType(left_type, right_type, mode);
             parsed_args = convertBinaryArithmeticFunDecimalArgs(actions_dag, parsed_args, evalType, substrait_func);
         }
 
@@ -166,17 +183,30 @@ public:
 
         if (converted)
         {
-            const auto parsed_output_type = removeNullable(TypeParser::parseType(substrait_func.output_type()));
-            assert(isDecimal(parsed_output_type));
             const Int32 parsed_precision = getDecimalPrecision(*parsed_output_type);
             const Int32 parsed_scale = getDecimalScale(*parsed_output_type);
+
+            auto output_type = removeNullable(func_node->result_type);
+            Int32 output_precision = getDecimalPrecision(*output_type);
+            Int32 output_scale = getDecimalScale(*output_type);
+
+             if (parsed_precision == output_precision && parsed_scale == output_scale && parsed_precision <= DecimalType::spark_max_precision )
+                 return func_node;
+
             func_node = checkDecimalOverflow(actions_dag, func_node, parsed_precision, parsed_scale);
 #ifndef NDEBUG
-            const auto output_type = removeNullable(func_node->result_type);
-            const Int32 output_precision = getDecimalPrecision(*output_type);
-            const Int32 output_scale = getDecimalScale(*output_type);
+            output_type = removeNullable(func_node->result_type);
+            output_precision = getDecimalPrecision(*output_type);
+            output_scale = getDecimalScale(*output_type);
             if (output_precision != parsed_precision || output_scale != parsed_scale)
-                throw Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Function {} has wrong output type", getName());
+                throw Exception(
+                    DB::ErrorCodes::BAD_ARGUMENTS,
+                    "Function {} has wrong output type, need Decimal({}, {}), actual Decimal({}, {})",
+                    getName(),
+                    parsed_precision,
+                    parsed_scale,
+                    output_precision,
+                    output_scale);
 #endif
 
             return func_node;
@@ -195,9 +225,9 @@ public:
     String getCHFunctionName(const substrait::Expression_ScalarFunction & substrait_func) const override { return "plus"; }
 
 protected:
-    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2) const override
+    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const DecimalType::MODE mode) const override
     {
-        return DecimalType::evalAddSubstractDecimalType(p1, s1, p2, s2);
+        return DecimalType::evalAddSubtractDecimalType(p1, s1, p2, s2, mode);
     }
 };
 
@@ -211,9 +241,9 @@ public:
     String getCHFunctionName(const substrait::Expression_ScalarFunction & substrait_func) const override { return "minus"; }
 
 protected:
-    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2) const override
+    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const DecimalType::MODE mode) const override
     {
-        return DecimalType::evalAddSubstractDecimalType(p1, s1, p2, s2);
+        return DecimalType::evalAddSubtractDecimalType(p1, s1, p2, s2, mode);
     }
 };
 
@@ -226,9 +256,9 @@ public:
     String getCHFunctionName(const substrait::Expression_ScalarFunction & substrait_func) const override { return "multiply"; }
 
 protected:
-    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2) const override
+    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const DecimalType::MODE mode) const override
     {
-        return DecimalType::evalMultiplyDecimalType(p1, s1, p2, s2);
+        return DecimalType::evalMultiplyDecimalType(p1, s1, p2, s2, mode);
     }
 };
 
@@ -241,9 +271,9 @@ public:
     String getCHFunctionName(const substrait::Expression_ScalarFunction & substrait_func) const override { return "modulo"; }
 
 protected:
-    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2) const override
+    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const DecimalType::MODE mode) const override
     {
-        return DecimalType::evalModuloDecimalType(p1, s1, p2, s2);
+        return DecimalType::evalModuloDecimalType(p1, s1, p2, s2, mode);
     }
 };
 
@@ -256,9 +286,10 @@ public:
     String getCHFunctionName(const substrait::Expression_ScalarFunction & substrait_func) const override { return "divide"; }
 
 protected:
-    DecimalType internalEvalType(const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2) const override
+    DecimalType internalEvalType(
+        const Int32 p1, const Int32 s1, const Int32 p2, const Int32 s2, const DecimalType::MODE mode) const override
     {
-        return DecimalType::evalDividetDecimalType(p1, s1, p2, s2);
+        return DecimalType::evalDivideDecimalType(p1, s1, p2, s2, mode);
     }
 
     const DB::ActionsDAG::Node * createFunctionNode(
@@ -277,7 +308,7 @@ protected:
 
 static FunctionParserRegister<FunctionParserPlus> register_plus;
 static FunctionParserRegister<FunctionParserMinus> register_minus;
-static FunctionParserRegister<FunctionParserMultiply> register_mltiply;
+static FunctionParserRegister<FunctionParserMultiply> register_multiply;
 static FunctionParserRegister<FunctionParserDivide> register_divide;
 static FunctionParserRegister<FunctionParserModulo> register_modulo;
 
