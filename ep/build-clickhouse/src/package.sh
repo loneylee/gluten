@@ -92,7 +92,8 @@ function build_gluten_by_spark_version() {
   cp "${GLUTEN_SOURCE}"/backends-clickhouse/target/gluten-*-spark-"${spark_profile}"-jar-with-dependencies.jar "${PACKAGE_DIR_PATH}"/jars/spark"${sv}"/gluten.jar
   cp "${GLUTEN_SOURCE}"/gluten-celeborn/clickhouse/target/gluten-celeborn-clickhouse-"${PROJECT_VERSION}"-jar-with-dependencies.jar "${PACKAGE_DIR_PATH}"/jars/spark"${sv}"
   delta_version=$(mvn -q -Dexec.executable="echo" -Dexec.args='${delta.version}' -Pspark-"${spark_profile}" --non-recursive exec:exec)
-  wget https://repo1.maven.org/maven2/io/delta/delta-core_2.12/"${delta_version}"/delta-core_2.12-"${delta_version}".jar -P "${PACKAGE_DIR_PATH}"/jars/spark"${sv}"
+  delta_package_name=$(mvn -q -Dexec.executable="echo" -Dexec.args='${delta.package.name}' -Pspark-"${spark_profile}" --non-recursive exec:exec)
+  wget https://repo1.maven.org/maven2/io/delta/"${delta_package_name}"_2.12/"${delta_version}"/"${delta_package_name}"_2.12-"${delta_version}".jar -P "${PACKAGE_DIR_PATH}"/jars/spark"${sv}"
   wget https://repo1.maven.org/maven2/io/delta/delta-storage/"${delta_version}"/delta-storage-"${delta_version}".jar -P "${PACKAGE_DIR_PATH}"/jars/spark"${sv}"
 }
 
