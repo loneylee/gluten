@@ -106,6 +106,9 @@ for sv in "${spark_versions[@]}"
 do
     build_gluten_by_spark_version "$sv"
     replace_dot=$(echo "$sv" | tr -d '.')
+    if [[ "$replace_dot" == "32" ]];then
+        continue # error: xxx are the same file
+    fi
     cp -f "${PACKAGE_DIR_PATH}"/jars/spark32/protobuf-java-"${protobuf_version}".jar "${PACKAGE_DIR_PATH}"/jars/spark"${replace_dot}"
     cp -f "${PACKAGE_DIR_PATH}"/jars/spark32/celeborn-client-spark-3-shaded_2.12-"${celeborn_version}".jar "${PACKAGE_DIR_PATH}"/jars/spark"${replace_dot}"
 done
