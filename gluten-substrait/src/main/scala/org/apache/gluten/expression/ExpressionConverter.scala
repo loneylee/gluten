@@ -446,6 +446,9 @@ object ExpressionConverter extends SQLConfHelper with Logging {
             LiteralTransformer(m.nullOnOverflow)),
           m
         )
+//      case PromotePrecision(_@Cast(child, _: DecimalType, _, _))
+//        if child.dataType.isInstanceOf[DecimalType] && !BackendsApiManager.getSettings.transformCheckOverflow =>
+//        replaceWithExpressionTransformer0(child, attributeSeq, expressionsMap)
       case _: NormalizeNaNAndZero | _: PromotePrecision | _: TaggingExpression =>
         ChildTransformer(
           substraitExprName,
@@ -466,16 +469,7 @@ object ExpressionConverter extends SQLConfHelper with Logging {
           if !BackendsApiManager.getSettings.transformCheckOverflow &&
             DecimalArithmeticUtil.isDecimalArithmetic(b) =>
         DecimalArithmeticUtil.checkAllowDecimalArithmetic()
-        val leftChild =
-          replaceWithExpressionTransformer0(b.left, attributeSeq, expressionsMap)
-        val rightChild =
-          replaceWithExpressionTransformer0(b.right, attributeSeq, expressionsMap)
-        DecimalArithmeticExpressionTransformer(
-          getAndCheckSubstraitName(b, expressionsMap),
-          leftChild,
-          rightChild,
-          decimalType,
-          b)
+        replaceWithExpressionTransformer0(b, attributeSeq, expressionsMap)
       case c: CheckOverflow =>
         CheckOverflowTransformer(
           substraitExprName,
@@ -483,17 +477,20 @@ object ExpressionConverter extends SQLConfHelper with Logging {
           c)
       case b: BinaryArithmetic if DecimalArithmeticUtil.isDecimalArithmetic(b) =>
         DecimalArithmeticUtil.checkAllowDecimalArithmetic()
-        if (!BackendsApiManager.getSettings.transformCheckOverflow) {
-          GenericExpressionTransformer(
-            substraitExprName,
-            expr.children.map(replaceWithExpressionTransformer0(_, attributeSeq, expressionsMap)),
-            expr
-          )
-        } else {
-          // Without the rescale and remove cast, result is right for high version Spark,
-          // but performance regression in velox
-          genRescaleDecimalTransformer(substraitExprName, b, attributeSeq, expressionsMap)
-        }
+//        if (!BackendsApiManager.getSettings.transformCheckOverflow) {
+//          GenericExpressionTransformer(
+//            substraitExprName,
+//            expr.children.map(replaceWithExpressionTransformer0(_, attributeSeq, expressionsMap)),
+//            expr
+//          )
+//        } else {
+//          // Without the rescale and remove cast, result is right for high version Spark,
+//          // but performance regression in velox
+//          genRescaleDecimalTransformer(substraitExprName, b, attributeSeq, expressionsMap)
+//        }
+        // Without the rescale and remove cast, result is right for high version Spark,
+        // but performance regression in velox
+        genRescaleDecimalTransformer(substraitExprName, b, attributeSeq, expressionsMap)
       case n: NaNvl =>
         BackendsApiManager.getSparkPlanExecApiInstance.genNaNvlTransformer(
           substraitExprName,
