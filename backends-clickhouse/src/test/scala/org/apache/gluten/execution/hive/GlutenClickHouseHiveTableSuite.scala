@@ -72,11 +72,14 @@ class GlutenClickHouseHiveTableSuite
   }
 
   private val txt_table_name = "hive_txt_test"
+  private val txt_upper_table_name = "hive_txt_upper_test"
   private val txt_user_define_input = "hive_txt_user_define_input"
   private val json_table_name = "hive_json_test"
   private val parquet_table_name = "hive_parquet_test"
 
   private val txt_table_create_sql = genTableCreateSql(txt_table_name, "textfile")
+  private val txt_upper_create_sql = genTableCreateUpperSql(txt_upper_table_name, "textfile")
+
   private val parquet_table_create_sql = genTableCreateSql(parquet_table_name, "parquet")
   private val json_table_create_sql = "create table if not exists %s (".format(json_table_name) +
     "string_field string," +
@@ -136,6 +139,24 @@ class GlutenClickHouseHiveTableSuite
       "map_field map<int, long>," +
       "map_field_with_null map<int, long>) stored as %s".format(fileFormat)
 
+  def genTableCreateUpperSql(tableName: String, fileFormat: String): String =
+    "create table if not exists %s (".format(tableName) +
+      "STRING_FIELD string," +
+      "INT_FIELD int," +
+      "LONG_FIELD long," +
+      "FLOAT_FIELD float," +
+      "DOUBLE_FIELD double," +
+      "SHORT_FIELD short," +
+      "BYTE_FIELD byte," +
+      "BOOL_FIELD boolean," +
+      "DECIMAL_FIELD decimal(23, 12)," +
+      "DATE_FIELD date," +
+      "TIMESTAMP_FIELD timestamp," +
+      "ARRAY_FIELD array<int>," +
+      "ARRAY_FIELD_WITH_NULL array<int>," +
+      "MAP_FIELD map<int, long>," +
+      "MAP_FIELD_WITH_NULL map<int, long>) stored as %s".format(fileFormat)
+
   protected def initializeTable(
       table_name: String,
       table_create_sql: String,
@@ -161,6 +182,7 @@ class GlutenClickHouseHiveTableSuite
   override def beforeAll(): Unit = {
     super.beforeAll()
     initializeTable(txt_table_name, txt_table_create_sql, null)
+    initializeTable(txt_upper_table_name, txt_upper_create_sql, null)
     initializeTable(txt_user_define_input, txt_table_user_define_create_sql, null)
     initializeTable(
       json_table_name,
@@ -985,19 +1007,19 @@ class GlutenClickHouseHiveTableSuite
     }
   }
 
-  test("GLUTEN-4333: fix CSE in aggregate operator") {
-    def checkOperatorCount[T <: TransformSupport](count: Int)(df: DataFrame)(implicit
-        tag: ClassTag[T]): Unit = {
-      if (sparkVersion.equals("3.3")) {
-        assert(
-          getExecutedPlan(df).count(
-            plan => {
-              plan.getClass == tag.runtimeClass
-            }) == count,
-          s"executed plan: ${getExecutedPlan(df)}")
-      }
+  def checkOperatorCount[T <: TransformSupport](count: Int)(df: DataFrame)(implicit
+      tag: ClassTag[T]): Unit = {
+    if (sparkVersion.equals("3.3")) {
+      assert(
+        getExecutedPlan(df).count(
+          plan => {
+            plan.getClass == tag.runtimeClass
+          }) == count,
+        s"executed plan: ${getExecutedPlan(df)}")
     }
+  }
 
+  test("GLUTEN-4333: fix CSE in aggregate operator") {
     val createTableSql =
       """
         |CREATE TABLE `test_cse`(
@@ -1214,8 +1236,9 @@ class GlutenClickHouseHiveTableSuite
                                 |select
                                 |  string_field,
                                 |  int_field,
-                                |  long_field
-                                | from $txt_user_define_input
+                                |  long_field,
+                                |  date_field
+                                | from $txt_table_name
                                 |""".stripMargin)
 
     sourceDF.write
@@ -1224,6 +1247,74 @@ class GlutenClickHouseHiveTableSuite
       .option("clickhouse.bucketColumnNames", "STRING_FIELD")
       .mode(SaveMode.Overwrite)
       .save(dataPath)
+
+    assert(new File(dataPath).listFiles().nonEmpty)
+
+    val dataPath2 = s"$basePath/lineitem_mergetree_bucket2"
+    val df2 = spark.sql(s"""
+                           |select
+                           |  string_field STRING_FIELD,
+                           |  int_field INT_FIELD,
+                           |  long_field LONG_FIELD,
+                           |  date_field DATE_FIELD
+                           | from $txt_table_name
+                           |""".stripMargin)
+
+    df2.write
+      .format("clickhouse")
+      .partitionBy("DATE_FIELD")
+      .option("clickhouse.numBuckets", "1")
+      .option("clickhouse.bucketColumnNames", "STRING_FIELD")
+      .option("clickhouse.orderByKey", "INT_FIELD,LONG_FIELD")
+      .option("clickhouse.primaryKey", "INT_FIELD")
+      .mode(SaveMode.Overwrite)
+      .save(dataPath2)
+    assert(new File(dataPath2).listFiles().nonEmpty)
+
+    val dataPath3 = s"$basePath/lineitem_mergetree_bucket3"
+    val df3 = spark.sql(s"""
+                           |select
+                           |  string_field,
+                           |  int_field,
+                           |  long_field,
+                           |  date_field
+                           | from $txt_upper_table_name
+                           |""".stripMargin)
+
+    df3.write
+      .format("clickhouse")
+      .partitionBy("date_field")
+      .option("clickhouse.numBuckets", "1")
+      .option("clickhouse.bucketColumnNames", "string_field")
+      .option("clickhouse.orderByKey", "int_field,LONG_FIELD")
+      .option("clickhouse.primaryKey", "INT_FIELD")
+      .mode(SaveMode.Overwrite)
+      .save(dataPath3)
+    assert(new File(dataPath3).listFiles().nonEmpty)
+
+    val dataPath4 = s"$basePath/lineitem_mergetree_bucket2"
+    val df4 = spark
+      .sql(s"""
+              |select
+              |  INT_FIELD ,
+              |  STRING_FIELD,
+              |  LONG_FIELD ,
+              |  DATE_FIELD
+              | from $txt_table_name
+              | order by INT_FIELD
+              |""".stripMargin)
+      .toDF("INT_FIELD", "STRING_FIELD", "LONG_FIELD", "DATE_FIELD")
+
+    df4.write
+      .format("clickhouse")
+      .partitionBy("DATE_FIELD")
+      .option("clickhouse.numBuckets", "3")
+      .option("clickhouse.bucketColumnNames", "STRING_FIELD")
+      .option("clickhouse.orderByKey", "INT_FIELD,LONG_FIELD")
+      .option("clickhouse.primaryKey", "INT_FIELD")
+      .mode(SaveMode.Append)
+      .save(dataPath4)
+    assert(new File(dataPath4).listFiles().nonEmpty)
   }
 
   test("GLUTEN-6506: Orc read time zone") {
@@ -1261,5 +1352,67 @@ class GlutenClickHouseHiveTableSuite
     val selectSql = s"SELECT * FROM $tableName"
     compareResultsAgainstVanillaSpark(selectSql, true, _ => {})
     sql(s"drop table if exists $tableName")
+  }
+
+  test("GLUTEN-7054: Fix exception when CSE meets common alias expression") {
+    val createTableSql = """
+                           |CREATE TABLE test_tbl_7054 (
+                           |  day STRING,
+                           |  event_id STRING,
+                           |  event STRUCT<
+                           |    event_info: MAP<STRING, STRING>
+                           |  >
+                           |) STORED AS PARQUET;
+                           |""".stripMargin
+
+    val insertDataSql = """
+                          |INSERT INTO test_tbl_7054
+                          |VALUES
+                          |  ('2024-08-27', '011441004',
+                          |     STRUCT(MAP('type', '1', 'action', '8', 'value_vmoney', '100'))),
+                          |  ('2024-08-27', '011441004',
+                          |     STRUCT(MAP('type', '2', 'action', '8', 'value_vmoney', '200'))),
+                          |  ('2024-08-27', '011441004',
+                          |     STRUCT(MAP('type', '4', 'action', '8', 'value_vmoney', '300')));
+                          |""".stripMargin
+
+    val selectSql = """
+                      |SELECT
+                      |  COALESCE(day, 'all') AS daytime,
+                      |  COALESCE(type, 'all') AS type,
+                      |  COALESCE(value_money, 'all') AS value_vmoney,
+                      |  SUM(CASE
+                      |      WHEN type IN (1, 2) AND action = 8 THEN value_vmoney
+                      |      ELSE 0
+                      |  END) / 60 AS total_value_vmoney
+                      |FROM (
+                      |  SELECT
+                      |    day,
+                      |    type,
+                      |    NVL(CAST(value_vmoney AS BIGINT), 0) AS value_money,
+                      |    action,
+                      |    type,
+                      |    CAST(value_vmoney AS BIGINT) AS value_vmoney
+                      |  FROM (
+                      |    SELECT
+                      |      day,
+                      |      event.event_info["type"] AS type,
+                      |      event.event_info["action"] AS action,
+                      |      event.event_info["value_vmoney"] AS value_vmoney
+                      |    FROM test_tbl_7054
+                      |    WHERE
+                      |      day = '2024-08-27'
+                      |      AND event_id = '011441004'
+                      |      AND event.event_info["type"] IN (1, 2, 4)
+                      |  ) a
+                      |) b
+                      |GROUP BY
+                      |  day, type, value_money
+                      |""".stripMargin
+
+    spark.sql(createTableSql)
+    spark.sql(insertDataSql)
+    runQueryAndCompare(selectSql)(df => checkOperatorCount[ProjectExecTransformer](3)(df))
+    spark.sql("DROP TABLE test_tbl_7054")
   }
 }
