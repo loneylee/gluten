@@ -79,7 +79,7 @@ StreamingAggregatingTransform::Status StreamingAggregatingTransform::prepare()
     {
         if (output.canPush())
         {
-            LOG_DEBUG(
+            LOG_TEST(
                 logger,
                 "Output one chunk. rows: {}, bytes: {}, current memory usage: {}",
                 output_chunk.getNumRows(),
@@ -122,7 +122,7 @@ StreamingAggregatingTransform::Status StreamingAggregatingTransform::prepare()
         return Status::NeedData;
     }
     input_chunk = input.pull(true);
-    LOG_DEBUG(
+    LOG_TEST(
         logger,
         "Input one new chunk. rows: {}, bytes: {}, current memory usage: {}",
         input_chunk.getNumRows(),
