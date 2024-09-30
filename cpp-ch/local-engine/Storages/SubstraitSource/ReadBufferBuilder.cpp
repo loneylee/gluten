@@ -516,7 +516,6 @@ private:
     static const std::string SHARED_CLIENT_KEY;
     static ConcurrentLRU<std::string, std::shared_ptr<DB::S3::Client>> per_bucket_clients;
     static FileCacheConcurrentMap files_cache_time_map;
-    DB::FileCachePtr file_cache;
 
     static std::string toBucketNameSetting(const std::string & bucket_name, const std::string & config_name)
     {
