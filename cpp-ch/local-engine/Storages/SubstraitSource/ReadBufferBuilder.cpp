@@ -441,9 +441,20 @@ public:
         const std::string& bucket = file_uri.getHost();
         const auto client = getClient(bucket);
         std::string key = file_uri.getPath().substr(1);
-        DB::S3::ObjectInfo object_info =  DB::S3::getObjectInfo(*client, bucket, key, "");
-        size_t object_size = object_info.size;
-        Int64 object_modified_time = object_info.last_modification_time;
+
+        size_t object_size = 0;
+        size_t object_modified_time = 0;
+        if (file_info.has_properties())
+        {
+            object_size = file_info.properties().filesize();
+            object_modified_time = file_info.properties().modificationtime();
+        }
+        else
+        {
+            DB::S3::ObjectInfo object_info = DB::S3::getObjectInfo(*client, bucket, key, "");
+            object_size = object_info.size;
+            object_modified_time = object_info.last_modification_time;
+        }
 
         if (read_settings.enable_filesystem_cache)
         {
@@ -452,14 +463,14 @@ public:
             // quick check
             if (last_cache_time != std::nullopt && last_cache_time.has_value())
             {
-                if (last_cache_time.value() < object_modified_time*1000l) //second to milli second
+                if (last_cache_time.value() < object_modified_time) //second to milli second
                 {
-                    files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time*1000l, file_cache);
+                    files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time, file_cache);
                 }
             }
             else
             {
-                files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time*1000l, file_cache);
+                files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time, file_cache);
             }
         }
 
