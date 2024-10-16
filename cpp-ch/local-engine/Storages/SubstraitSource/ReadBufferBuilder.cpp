@@ -47,7 +47,6 @@
 #include <Poco/Logger.h>
 #include <Poco/URI.h>
 #include <Common/CHUtil.h>
-#include <Common/FileCacheConcurrentMap.h>
 #include <Common/GlutenConfig.h>
 #include <Common/logger_useful.h>
 #include <Common/safe_cast.h>
@@ -78,6 +77,8 @@ namespace ErrorCodes
 
 namespace local_engine
 {
+FileCacheConcurrentMap ReadBufferBuilder::files_cache_time_map;
+
 template <class key_type, class value_type>
 class ConcurrentLRU
 {
@@ -238,8 +239,12 @@ public:
         }
 
         size_t file_size = 0;
+        size_t last_modified_time = 0;
         if (file_info.has_properties())
+        {
             file_size = file_info.properties().filesize();
+            last_modified_time = file_info.properties().modificationtime();
+        }
 
         std::unique_ptr<DB::ReadBuffer> read_buffer;
 
@@ -273,7 +278,27 @@ public:
                     hdfs_uri, hdfs_file_path, config, read_settings, read_util_position, true, object.bytes_size);
             };
 
-            DB::StoredObjects stored_objects{DB::StoredObject{file_uri.getPath().substr(1), "", file_size}};
+            auto remote_path = file_uri.getPath().substr(1);
+            if (read_settings.enable_filesystem_cache)
+            {
+                auto file_cache_key = DB::FileCacheKey(remote_path);
+                auto last_cache_time = files_cache_time_map.get(file_cache_key);
+                // quick check
+                if (last_cache_time != std::nullopt && last_cache_time.has_value())
+                {
+                    auto & [cached_modified_time, cached_file_size] = last_cache_time.value();
+                    if (cached_modified_time < last_modified_time || cached_file_size != file_size)
+                        files_cache_time_map.update_cache_time(file_cache_key, last_modified_time, file_size, file_cache);
+                }
+                else
+                {
+                    // if process restart, cache map will be empty,
+                    //   we recommend continuing to use caching instead of renew it
+                    files_cache_time_map.insert(file_cache_key, last_modified_time, file_size);
+                }
+            }
+
+            DB::StoredObjects stored_objects{DB::StoredObject{remote_path, "", file_size}};
             auto cache_hdfs_read = std::make_unique<DB::ReadBufferFromRemoteFSGather>(
                 std::move(hdfs_read_buffer_creator), stored_objects, "hdfs:", read_settings, nullptr, /* use_external_buffer */ false);
             cache_hdfs_read->setReadUntilPosition(read_util_position);
@@ -436,7 +461,7 @@ public:
         std::string key = file_uri.getPath().substr(1);
         DB::S3::ObjectInfo object_info =  DB::S3::getObjectInfo(*client, bucket, key, "");
         size_t object_size = object_info.size;
-        Int64 object_modified_time = object_info.last_modification_time;
+        Int64 last_modified_time = object_info.last_modification_time;
 
         if (read_settings.enable_filesystem_cache)
         {
@@ -445,14 +470,15 @@ public:
             // quick check
             if (last_cache_time != std::nullopt && last_cache_time.has_value())
             {
-                if (last_cache_time.value() < object_modified_time*1000l) //second to milli second
-                {
-                    files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time*1000l, file_cache);
-                }
+                auto & [cached_modified_time, cached_file_size] = last_cache_time.value();
+                if (cached_modified_time < last_modified_time || cached_file_size != object_size)
+                    files_cache_time_map.update_cache_time(file_cache_key, last_modified_time, object_size, file_cache);
             }
             else
             {
-                files_cache_time_map.update_cache_time(file_cache_key, key, object_modified_time*1000l, file_cache);
+                // if process restart, cache map will be empty,
+                //   we recommend continuing to use caching instead of renew it
+                files_cache_time_map.insert(file_cache_key, last_modified_time, object_size);
             }
         }
 
@@ -508,8 +534,6 @@ public:
 private:
     static const std::string SHARED_CLIENT_KEY;
     static ConcurrentLRU<std::string, std::shared_ptr<DB::S3::Client>> per_bucket_clients;
-    static FileCacheConcurrentMap files_cache_time_map;
-    DB::FileCachePtr file_cache;
 
     std::string & stripQuote(std::string & s)
     {
@@ -590,7 +614,7 @@ private:
 
         String config_prefix = "s3";
         auto endpoint = getSetting(settings, bucket_name, BackendInitializerUtil::HADOOP_S3_ENDPOINT, "https://s3.us-west-2.amazonaws.com");
-        if (!endpoint.starts_with("https://"))
+        if (!endpoint.starts_with("https://") && !endpoint.starts_with("http://"))
         {
             if (endpoint.starts_with("s3"))
                 // as https://docs.cloudera.com/HDPDocuments/HDP3/HDP-3.0.1/bk_cloud-data-access/content/s3-config-parameters.html
@@ -687,7 +711,6 @@ private:
 };
 const std::string S3FileReadBufferBuilder::SHARED_CLIENT_KEY = "___shared-client___";
 ConcurrentLRU<std::string, std::shared_ptr<DB::S3::Client>> S3FileReadBufferBuilder::per_bucket_clients(100);
-FileCacheConcurrentMap S3FileReadBufferBuilder::files_cache_time_map;
 
 #endif
 

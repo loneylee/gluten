@@ -20,6 +20,7 @@
 #include <memory>
 #include <IO/ReadBuffer.h>
 #include <substrait/plan.pb.h>
+#include <Common/FileCacheConcurrentMap.h>
 
 
 namespace local_engine
@@ -43,8 +44,12 @@ protected:
     DB::ReadSettings getReadSettings(DB::ContextPtr context) const;
     DB::ContextPtr context;
 
+private:
+    void updateCaches(const String & key, const size_t & last_modified_time, const size_t & file_size) const;
+
 public:
     DB::FileCachePtr file_cache = nullptr;
+    static FileCacheConcurrentMap files_cache_time_map;
 };
 
 using ReadBufferBuilderPtr = std::shared_ptr<ReadBufferBuilder>;

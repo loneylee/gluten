@@ -46,18 +46,18 @@ class GlutenClickHouseWholeStageTransformerSuite extends WholeStageTransformerSu
 
   val S3_METADATA_PATH = s"/tmp/metadata/s3/$sparkVersion/"
   val S3_CACHE_PATH = s"/tmp/s3_cache/$sparkVersion/"
-  val S3_ENDPOINT = "s3://127.0.0.1:9000/"
+  val S3_ENDPOINT = "s3://127.0.0.1:8000/"
   val MINIO_ENDPOINT: String = S3_ENDPOINT.replace("s3", "http")
   val BUCKET_NAME: String = sparkVersion.replace(".", "-")
   val WHOLE_PATH: String = MINIO_ENDPOINT + BUCKET_NAME + "/"
 
   val HDFS_METADATA_PATH = s"/tmp/metadata/hdfs/$sparkVersion/"
   val HDFS_CACHE_PATH = s"/tmp/hdfs_cache/$sparkVersion/"
-  val HDFS_URL_ENDPOINT = s"hdfs://127.0.0.1:8020"
+  val HDFS_URL_ENDPOINT = "hdfs://192.168.3.107:8020"
   val HDFS_URL = s"$HDFS_URL_ENDPOINT/$sparkVersion"
 
-  val S3_ACCESS_KEY = "BypTYzcXOlfr03FFIvt4"
-  val S3_SECRET_KEY = "K9MDaGItPSaphorZM8t4hXf30gHF9dBWi6L2dK5E"
+  val S3_ACCESS_KEY = "12345678"
+  val S3_SECRET_KEY = "12345678"
 
   val CH_DEFAULT_STORAGE_DIR = "/data"
 
