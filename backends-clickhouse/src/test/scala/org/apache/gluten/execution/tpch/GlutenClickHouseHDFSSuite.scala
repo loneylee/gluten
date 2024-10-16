@@ -17,8 +17,10 @@
 package org.apache.gluten.execution.tpch
 
 import org.apache.gluten.execution.{CHNativeCacheManager, FileSourceScanExecTransformer, GlutenClickHouseTPCHAbstractSuite}
+
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanHelper
+
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.fs.Path
 
@@ -142,14 +144,13 @@ class GlutenClickHouseHDFSSuite
       val out = fs.create(new Path(s"$file_path/00000_0"))
       IOUtils.write("1\n2\n3\n4\n5", out, Charset.defaultCharset())
       out.close()
-      sql(
-        s"""
-           |CREATE external TABLE `issue_7542`(
-           |  `c_custkey` int )
-           |using CSV
-           |LOCATION
-           |  '$file_path/'
-           |""".stripMargin)
+      sql(s"""
+             |CREATE external TABLE `issue_7542`(
+             |  `c_custkey` int )
+             |using CSV
+             |LOCATION
+             |  '$file_path/'
+             |""".stripMargin)
 
       sql(s"""select * from issue_7542""").collect()
       fs.delete(new Path(s"$file_path/00000_0"), false)
