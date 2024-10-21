@@ -271,11 +271,11 @@ public:
             }
 
             ReadBufferCreator hdfs_read_buffer_creator
-                = [this, hdfs_uri = uri_path, hdfs_file_path = file_uri.getPath(), read_settings, &config, read_util_position](
+                = [this, hdfs_uri = uri_path, hdfs_file_path = file_uri.getPath(), read_settings, &config, file_size](
                       bool /* restricted_seek */, const DB::StoredObject & object) -> std::unique_ptr<DB::ReadBufferFromHDFS>
             {
                 return std::make_unique<DB::ReadBufferFromHDFS>(
-                    hdfs_uri, hdfs_file_path, config, read_settings, read_util_position, true, object.bytes_size);
+                    hdfs_uri, hdfs_file_path, config, read_settings, file_size, true, object.bytes_size);
             };
 
             auto remote_path = file_uri.getPath().substr(1);

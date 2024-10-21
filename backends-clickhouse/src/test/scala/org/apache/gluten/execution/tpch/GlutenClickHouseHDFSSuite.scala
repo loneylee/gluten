@@ -169,4 +169,39 @@ class GlutenClickHouseHDFSSuite
       sql("drop table issue_7542")
     }
   }
+
+  test("test set_read_util_position") {
+    val tableName = "read_until_test"
+    val tablePath = s"$tablesPath/$SPARK_DIR_NAME/$tableName/"
+    val targetFile = new Path(tablesPath)
+    val fs = targetFile.getFileSystem(spark.sessionState.newHadoopConf())
+    fs.delete(new Path(tablePath), true)
+    sql(s"""
+           | CREATE TABLE $tableName
+           | USING csv
+           | LOCATION '$tablePath'
+           | as
+           | select * from lineitem
+           |""".stripMargin)
+
+    val sql_str =
+      s"""
+         |SELECT
+         |    sum(l_extendedprice * l_discount) AS revenue
+         |FROM
+         |    $tableName
+         |WHERE
+         |    l_shipdate >= date'1994-01-01'
+         |    AND l_shipdate < date'1994-01-01' + interval 1 year
+         |    AND l_discount BETWEEN 0.06 - 0.01 AND 0.06 + 0.01
+         |    AND l_quantity < 24;
+         |
+         |""".stripMargin
+
+    withSQLConf("spark.sql.files.maxPartitionBytes" -> "1M") {
+      compareResultsAgainstVanillaSpark(sql_str, compareResult = true, _ => {})
+    }
+
+    fs.delete(new Path(tablePath), true)
+  }
 }
