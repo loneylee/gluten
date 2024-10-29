@@ -16,6 +16,8 @@
  */
 package org.apache.gluten.utils
 
+import org.apache.gluten.Lg
+
 import org.apache.spark.internal.Logging
 
 import com.google.protobuf.WrappersProto
@@ -34,8 +36,12 @@ object SubstraitPlanPrinterUtil extends Logging {
       .build()
   }
   private def MessageToJson(message: com.google.protobuf.Message): String = {
+    val begin = System.currentTimeMillis()
     val registry = typeRegistry(message.getDescriptorForType)
-    JsonFormat.printer.usingTypeRegistry(registry).print(message)
+    Lg.p("registry end", begin)
+    val a = JsonFormat.printer.usingTypeRegistry(registry).print(message)
+    Lg.p("JsonFormat end", begin)
+    a
   }
 
   /** Transform Substrait Plan to json format. */
