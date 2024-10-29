@@ -16,7 +16,7 @@
  */
 package org.apache.gluten.execution
 
-import org.apache.gluten.{GlutenConfig, GlutenNumaBindingInfo}
+import org.apache.gluten.{GlutenConfig, GlutenNumaBindingInfo, Lg}
 import org.apache.gluten.backendsapi.BackendsApiManager
 import org.apache.gluten.exception.GlutenException
 import org.apache.gluten.expression._
@@ -267,6 +267,7 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
   }
 
   override def doExecuteColumnar(): RDD[ColumnarBatch] = {
+    val begin = System.currentTimeMillis()
     val pipelineTime: SQLMetric = longMetric("pipelineTime")
     // We should do transform first to make sure all subqueries are materialized
     val wsCtx = GlutenTimeMetric.withMillisTime {
@@ -279,6 +280,7 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
     val inputRDDs = new ColumnarInputRDDsWrapper(columnarInputRDDs)
     // Check if BatchScan exists.
     val basicScanExecTransformers = findAllScanTransformers()
+    Lg.p("findAllScanTransformers end", begin)
 
     if (basicScanExecTransformers.nonEmpty) {
 
@@ -288,13 +290,18 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
        * rather than genFinalStageIterator will be invoked
        */
       val allScanPartitions = basicScanExecTransformers.map(_.getPartitions)
+      Lg.p("getPartition end", begin)
+
       val allScanSplitInfos =
         getSplitInfosFromPartitions(basicScanExecTransformers, allScanPartitions)
+      Lg.p("allScanSplitInfos end", begin)
       val inputPartitions =
         BackendsApiManager.getIteratorApiInstance.genPartitions(
           wsCtx,
           allScanSplitInfos,
           basicScanExecTransformers)
+      Lg.p("inputPartitions end", begin)
+
       val rdd = new GlutenWholeStageColumnarRDD(
         sparkContext,
         inputPartitions,
@@ -319,6 +326,7 @@ case class WholeStageTransformer(child: SparkPlan, materializeInput: Boolean = f
                 case _ =>
               })
         })
+      Lg.p("rdd end", begin)
       rdd
     } else {
 

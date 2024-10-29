@@ -16,7 +16,7 @@
  */
 package org.apache.gluten.execution
 
-import org.apache.gluten.GlutenConfig
+import org.apache.gluten.{GlutenConfig, Lg}
 import org.apache.gluten.backendsapi.BackendsApiManager
 import org.apache.gluten.metrics.{GlutenTimeMetric, IMetrics}
 
@@ -62,7 +62,7 @@ class GlutenWholeStageColumnarRDD(
   private val numaBindingInfo = GlutenConfig.getConf.numaBindingInfo
 
   override def compute(split: Partition, context: TaskContext): Iterator[ColumnarBatch] = {
-
+    val begin = System.currentTimeMillis()
     // To support input_file_name(). According to semantic we should return
     // the exact file name a row belongs to. However in columnar engine it's
     // not easy to accomplish this. so we return a list of file(part) names
@@ -73,12 +73,15 @@ class GlutenWholeStageColumnarRDD(
         InputFileBlockHolderProxy.unset()
     }
 
+    Lg.p("compute end", begin)
     GlutenTimeMetric.millis(pipelineTime) {
       _ =>
         ExecutorManager.tryTaskSet(numaBindingInfo)
         val (inputPartition, inputColumnarRDDPartitions) = castNativePartition(split)
+        Lg.p("castNativePartition end", begin)
         val inputIterators = rdds.getIterators(inputColumnarRDDPartitions, context)
-        BackendsApiManager.getIteratorApiInstance.genFirstStageIterator(
+        Lg.p("inputIterators end", begin)
+        val a = BackendsApiManager.getIteratorApiInstance.genFirstStageIterator(
           inputPartition,
           context,
           pipelineTime,
@@ -87,6 +90,8 @@ class GlutenWholeStageColumnarRDD(
           split.index,
           inputIterators
         )
+        Lg.p("genFirstStageIterator end", begin)
+        a
     }
   }
 

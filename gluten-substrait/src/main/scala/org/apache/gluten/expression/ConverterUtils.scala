@@ -16,6 +16,7 @@
  */
 package org.apache.gluten.expression
 
+import org.apache.gluten.Lg
 import org.apache.gluten.backendsapi.BackendsApiManager
 import org.apache.gluten.exception.GlutenNotSupportException
 import org.apache.gluten.substrait.`type`._
@@ -158,10 +159,12 @@ object ConverterUtils extends Logging {
     for (name <- nameList) {
       nStructBuilder.addNames(name)
     }
-
+    val begin = System.currentTimeMillis()
     val namedStructJson = SubstraitPlanPrinterUtil.substraitNamedStructToJson(
       nStructBuilder
         .build())
+    Lg.p("namedStructJson end", begin)
+
     namedStructJson.replaceAll("\n", "").replaceAll(" ", "")
   }
 

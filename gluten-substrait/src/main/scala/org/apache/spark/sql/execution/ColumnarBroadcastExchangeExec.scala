@@ -16,6 +16,7 @@
  */
 package org.apache.spark.sql.execution
 
+import org.apache.gluten.Lg
 import org.apache.gluten.backendsapi.BackendsApiManager
 import org.apache.gluten.extension.GlutenPlan
 import org.apache.gluten.metrics.GlutenTimeMetric
@@ -56,11 +57,14 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan)
 
   @transient
   override lazy val relationFuture: java.util.concurrent.Future[broadcast.Broadcast[Any]] = {
+    val begin = System.currentTimeMillis()
     SQLExecution.withThreadLocalCaptured[broadcast.Broadcast[Any]](
       session,
       BroadcastExchangeExec.executionContext) {
       try {
+        Lg.p("ColumnarBroadcastExchangeExec begin", begin)
         SparkShimLoader.getSparkShims.setJobDescriptionOrTagForBroadcastExchange(sparkContext, this)
+        Lg.p("ColumnarBroadcastExchangeExec relation begin", begin)
         val relation = GlutenTimeMetric.millis(longMetric("collectTime")) {
           _ =>
             // this created relation ignore HashedRelationBroadcastMode isNullAware, because we
@@ -76,7 +80,7 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan)
               longMetric("numOutputRows"),
               longMetric("dataSize"))
         }
-
+        Lg.p("ColumnarBroadcastExchangeExec relation end", begin)
         val broadcasted = GlutenTimeMetric.millis(longMetric("broadcastTime")) {
           _ =>
             // Broadcast the relation
@@ -90,6 +94,7 @@ case class ColumnarBroadcastExchangeExec(mode: BroadcastMode, child: SparkPlan)
         SQLMetrics.postDriverMetricUpdates(sparkContext, executionId, metrics.values.toSeq)
 
         promise.success(broadcasted)
+        Lg.p("broadcasted", begin)
         broadcasted
       } catch {
         // SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we throw

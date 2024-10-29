@@ -26,6 +26,8 @@ import org.apache.gluten.utils.ConfigUtil;
 import org.apache.spark.sql.internal.SQLConf;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -70,14 +72,28 @@ public class CHNativeExpressionEvaluator extends ExpressionEvaluatorJniWrapper {
       byte[][] splitInfo,
       List<ColumnarNativeIterator> iterList,
       boolean materializeInput) {
+    long begin = System.currentTimeMillis();
     CHThreadGroup.registerNewThreadGroup();
+    byte[] serialize = ConfigUtil.serialize(getNativeBackendConf());
+    System.out.println(
+        LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+            + " ConfigUtil("
+            + Thread.currentThread().getId()
+            + "): "
+            + (System.currentTimeMillis() - begin));
     long handle =
         nativeCreateKernelWithIterator(
             wsPlan,
             splitInfo,
             iterList.toArray(new ColumnarNativeIterator[0]),
-            ConfigUtil.serialize(getNativeBackendConf()),
+            serialize,
             materializeInput);
+    System.out.println(
+        LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss.SSS"))
+            + " handle("
+            + Thread.currentThread().getId()
+            + "): "
+            + (System.currentTimeMillis() - begin));
     return createBatchIterator(handle);
   }
 

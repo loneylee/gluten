@@ -16,7 +16,7 @@
  */
 package org.apache.gluten.backendsapi.clickhouse
 
-import org.apache.gluten.GlutenConfig
+import org.apache.gluten.{GlutenConfig, Lg}
 import org.apache.gluten.backendsapi.{BackendsApiManager, SparkPlanExecApi}
 import org.apache.gluten.exception.{GlutenException, GlutenNotSupportException}
 import org.apache.gluten.execution._
@@ -471,7 +471,7 @@ class CHSparkPlanExecApi extends SparkPlanExecApi with Logging {
       child: SparkPlan,
       numOutputRows: SQLMetric,
       dataSize: SQLMetric): BuildSideRelation = {
-
+    val begin = System.currentTimeMillis()
     val (buildKeys, isNullAware) = mode match {
       case mode1: HashedRelationBroadcastMode =>
         (mode1.key, mode1.isNullAware)
@@ -549,9 +549,10 @@ class CHSparkPlanExecApi extends SparkPlanExecApi with Logging {
     } else {
       0
     }
+    Lg.p("buildSideRDD begin", begin)
     val countsAndBytes =
       CHExecUtil.buildSideRDD(dataSize, newChild, isNullAware, keyColumnIndex).collect
-
+    Lg.p("buildSideRDD end", begin)
     val batches = countsAndBytes.map(_._2)
     val totalBatchesSize = batches.map(_.length).sum
     val rawSize = dataSize.value

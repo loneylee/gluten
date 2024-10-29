@@ -16,7 +16,7 @@
  */
 package org.apache.spark.sql.execution.utils
 
-import org.apache.gluten.GlutenConfig
+import org.apache.gluten.{GlutenConfig, Lg}
 import org.apache.gluten.backendsapi.clickhouse.CHBackendSettings
 import org.apache.gluten.expression.ConverterUtils
 import org.apache.gluten.row.SparkRowInfo
@@ -63,15 +63,18 @@ object CHExecUtil extends Logging {
       compressionCodec: Option[String] = Some("lz4"),
       compressionLevel: Option[Int] = None,
       bufferSize: Int = 4 << 10): Iterator[(Long, Array[Byte], Boolean)] = {
+    val begin = System.currentTimeMillis()
     var count = 0L
     var hasNullKeyValues = false
     val bos = new ByteArrayOutputStream()
     val buffer = new Array[Byte](bufferSize) // 4K
     val level = compressionLevel.getOrElse(Int.MinValue)
+    Lg.p("blockOutputStream begin", begin)
     val blockOutputStream =
       compressionCodec
         .map(new BlockOutputStream(bos, buffer, dataSize, true, _, level, bufferSize))
         .getOrElse(new BlockOutputStream(bos, buffer, dataSize, false, "", level, bufferSize))
+    Lg.p("blockOutputStream end", begin)
     if (isNullAware) {
       while (iter.hasNext) {
         val batch = iter.next()
@@ -87,8 +90,11 @@ object CHExecUtil extends Logging {
         blockOutputStream.write(batch)
       }
     }
+    Lg.p("flush begin", begin)
     blockOutputStream.flush()
+    Lg.p("flush end", begin)
     blockOutputStream.close()
+    Lg.p("close end", begin)
     Iterator((count, bos.toByteArray, hasNullKeyValues))
   }
 
